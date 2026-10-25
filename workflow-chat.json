@@ -368,13 +368,14 @@
       ],
       "parameters": {
         "promptType": "define",
-        "hasOutputParser": true,
-        "text": "=Conversation so far:\n{{ $('Recent history').all().filter(i => i.json.id).reverse().map(i => i.json.role === 'user' ? 'Client: ' + i.json.text : i.json.role === 'shoot' ? '(The client shot an ad from the brief.)' : 'You: ' + i.json.text).join('\\n') || '(none, this is their first message)' }}\n\nContext: product photo attached: {{ $('Chat input').first().json.hasPhoto ? 'yes' : 'no' }}. Level {{ $('Progress: message').first().json.progress.level }} ({{ $('Progress: message').first().json.progress.title }}), shoots left: {{ $('Progress: message').first().json.progress.credits }}, email verified: {{ $('Progress: message').first().json.progress.email ? 'yes' : 'no' }}.\n\nClient: {{ $('Chat input').first().json.text }}",
+        "hasOutputParser": false,
+        "text": "=Conversation so far:\n{{ $('Recent history').all().filter(i => i.json.id).reverse().map(i => i.json.role === 'user' ? 'Client: ' + i.json.text : i.json.role === 'shoot' ? '(The client shot an ad from the brief.)' : i.json.role === 'photo' ? '(The client uploaded their product photo.)' : 'You: ' + i.json.text).join('\\n') || '(none, this is their first message)' }}\n\nContext: product photo on file: {{ $('Progress: message').first().json.progress.photo ? 'yes' : 'no' }}. Level {{ $('Progress: message').first().json.progress.level }} ({{ $('Progress: message').first().json.progress.title }}), shoots left: {{ $('Progress: message').first().json.progress.credits }}, email verified: {{ $('Progress: message').first().json.progress.email ? 'yes' : 'no' }}.\n\nClient: {{ $('Chat input').first().json.text }}",
         "options": {
-          "systemMessage": "# Role\n\nYou are the art director at Go 2 Market, a studio that turns everyday product photos into campaign-ready advertising images. You chat with potential clients on our website.\n\n# Goal\n\nUnderstand the client's product well enough to write a shoot brief, then hand it over so they can shoot the ad right here in the chat. Be someone they enjoy talking to: sharp, warm and genuinely useful about marketing.\n\n# How you talk\n\n- Short replies: 1-3 sentences, never more than 60 words. Plain text only: no markdown, no lists, no emoji.\n- Ask at most two questions per reply.\n- Sound like a senior creative, not a chatbot: specific, confident, never gushing. Never say \"Great question\", \"Absolutely\" or \"I'd be happy to help\".\n- If asked what we do: we create AI-assisted product advertising, from studio-grade product shots to campaign visuals. The first shoot is free once they verify their email, and they earn more shoots by leveling up. Never invent prices, timelines or guarantees; for anything commercial, offer to connect them with the team.\n- Off-topic questions: answer briefly if harmless, then steer back to their product.\n\n# What a brief needs\n\n1. The product name and what it is.\n2. Who it is for and the feeling it should create (mood, setting, season, where the ad will run).\n3. A product photo. The client attaches it with the paperclip in the chat. The context line tells you whether one is attached.\n\nAsk for whatever is missing, one or two things at a time. Once you know the product, ask for the photo if it is missing.\n\n# The brief\n\nWhen you know the product and a mood AND a photo is attached, return a brief and say in your reply that the brief is ready and they can shoot it below. Otherwise brief is null. If they ask for changes after a brief, return the updated brief.\n- brief.title: the product name, at most 60 characters.\n- brief.description: 1-3 sentences for the image team: what the product is, the audience, the mood, and the setting and props you recommend. At most 400 characters. Do not describe the bottle or label; the photo shows it.\n\n# Progress\n\nClients earn XP for chatting and level up to unlock more free shoots, formats and scene styles. The context line shows their level and shoots left. Mention it only when useful, for example when they have no shoots left, tell them a few more messages will earn the next one. Never invent XP numbers.\n\n# Output\n\nReturn JSON: { \"reply\": string, \"brief\": { \"title\": string, \"description\": string } | null }"
+          "systemMessage": "# Role\n\nYou are the art director at Go 2 Market, a studio that turns everyday product photos into campaign-ready advertising images. You chat with potential clients on our website.\n\n# Goal\n\nUnderstand the client's product well enough to write a shoot brief, then hand it over so they can shoot the ad right here in the chat. Be someone they enjoy talking to: sharp, warm and genuinely useful about marketing.\n\n# How you talk\n\n- Short replies: 1-3 sentences, never more than 60 words. Plain text only: no markdown, no lists, no emoji.\n- Ask at most two questions per reply.\n- Sound like a senior creative, not a chatbot: specific, confident, never gushing. Never say \"Great question\", \"Absolutely\" or \"I'd be happy to help\".\n- If asked what we do: we create AI-assisted product advertising, from studio-grade product shots to campaign visuals. The first shoot is free once they verify their email, and they earn more shoots by leveling up. Never invent prices, timelines or guarantees; for anything commercial, offer to connect them with the team.\n- Off-topic questions: answer briefly if harmless, then steer back to their product.\n\n# What a brief needs\n\n1. The product name and what it is.\n2. Who it is for and the feeling it should create (mood, setting, season, where the ad will run).\n3. A product photo. The client uploads it once with the paperclip and it stays on file for every shoot. The context line tells you whether one is on file.\n\nAsk for whatever is missing, one or two things at a time. Ask for the photo only when none is on file. When a photo is on file, never ask for it, never ask them to re-upload or resend it, and never ask whether you received it: you have it. If they want a different photo, they can use Replace on the photo above the message box.\n\n# The brief\n\nWhen you know the product and a mood AND a photo is on file, return a brief and say in your reply that the brief is ready and they can shoot it below. Otherwise brief is null. If they ask for changes or another shoot, return an updated brief right away; the same photo is reused.\n- brief.title: the product name, at most 60 characters.\n- brief.description: 1-3 sentences for the image team: what the product is, the audience, the mood, and the setting and props you recommend. At most 400 characters. Do not describe the bottle or label; the photo shows it.\n\n# Progress\n\nClients earn XP for chatting and level up to unlock more free shoots, formats and scene styles. The context line shows their level and shoots left. Mention it only when useful, for example when they have no shoots left, tell them a few more messages will earn the next one. Never invent XP numbers.\n\n# Output\n\nReturn JSON: { \"reply\": string, \"brief\": { \"title\": string, \"description\": string } | null }"
         }
       },
-      "onError": "continueErrorOutput"
+      "onError": "continueErrorOutput",
+      "executeOnce": true
     },
     {
       "id": "62d8a8d4-2696-48a9-99b6-e6aa1cc8465a",
@@ -393,7 +394,8 @@
           "cachedResultName": "gpt-4.1"
         },
         "options": {
-          "temperature": 0.7
+          "temperature": 0.7,
+          "responseFormat": "json_object"
         }
       },
       "credentials": {
@@ -401,20 +403,6 @@
           "id": "L1SDfTYUQ3t3VySO",
           "name": "OpenAI account"
         }
-      }
-    },
-    {
-      "id": "2186c7ce-0283-473e-a3aa-448281ad98b2",
-      "name": "Reply format",
-      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
-      "typeVersion": 1.3,
-      "position": [
-        1488,
-        560
-      ],
-      "parameters": {
-        "schemaType": "manual",
-        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"reply\": {\n      \"type\": \"string\"\n    },\n    \"brief\": {\n      \"type\": [\n        \"object\",\n        \"null\"\n      ],\n      \"properties\": {\n        \"title\": {\n          \"type\": \"string\"\n        },\n        \"description\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"title\",\n        \"description\"\n      ]\n    }\n  },\n  \"required\": [\n    \"reply\",\n    \"brief\"\n  ]\n}"
       }
     },
     {
@@ -427,7 +415,7 @@
         240
       ],
       "parameters": {
-        "jsCode": "const input = $('Chat input').first().json;\nconst out = $('Art director').first().json.output;\nreturn [\n  { json: { uid: input.uid, role: 'user', text: input.text, brief: '' } },\n  { json: { uid: input.uid, role: 'assistant', text: out.reply, brief: out.brief ? JSON.stringify(out.brief) : '' } },\n];"
+        "jsCode": "const input = $('Chat input').first().json;\nconst out = $('Parse reply').first().json;\nreturn [\n  { json: { uid: input.uid, role: 'user', text: input.text, brief: '' } },\n  { json: { uid: input.uid, role: 'assistant', text: out.reply, brief: out.brief ? JSON.stringify(out.brief) : '' } },\n];"
       }
     },
     {
@@ -509,7 +497,7 @@
       ],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { success: true, data: { reply: $('Art director').first().json.output.reply, brief: $('Art director').first().json.output.brief ?? null, progress: $('Progress: message').first().json.progress, gained: $('Progress: message').first().json.gained, leveledUp: $('Progress: message').first().json.leveledUp }, error: null } }}",
+        "responseBody": "={{ { success: true, data: { reply: $('Parse reply').first().json.reply, brief: $('Parse reply').first().json.brief, progress: $('Progress: message').first().json.progress, gained: $('Progress: message').first().json.gained, leveledUp: $('Progress: message').first().json.leveledUp }, error: null } }}",
         "options": {
           "responseCode": 200
         }
@@ -563,9 +551,10 @@
         "respondWith": "json",
         "responseBody": "={{ { success: false, data: { progress: $('Progress: message').first().json.progress }, error: 'The art director is unavailable right now. Try again in a moment.' } }}",
         "options": {
-          "responseCode": 502
+          "responseCode": 500
         }
-      }
+      },
+      "executeOnce": true
     },
     {
       "id": "8881e3dc-16e1-45f3-91cf-25a488674d23",
@@ -981,6 +970,311 @@
           "responseCode": 400
         }
       }
+    },
+    {
+      "id": "b3e2f61c-70f1-4ad6-8a7e-8d97415d72ef",
+      "name": "Photo webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        1400
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "g2m-photo",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "0fe4f2e5-5757-4f08-92fc-03555554cbe1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "BmL6rw2CJE5ljL46",
+          "name": "Header Auth account 2"
+        }
+      }
+    },
+    {
+      "id": "ce59519a-1160-4df1-9fd3-a9638bef6d0e",
+      "name": "Photo input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        1400
+      ],
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst body = item.json.body ?? {};\nconst photo = item.binary?.photo;\nconst uid = String(body.uid ?? '');\n\nlet error = null;\nif (!/^[a-z0-9]{24}$/.test(uid)) error = 'Invalid session.';\nelse if (!photo) error = 'Attach a product photo.';\nelse if (!String(photo.mimeType ?? '').startsWith('image/')) error = 'Photo must be an image.';\n\nconst photoName = String(photo?.fileName ?? 'Product photo').slice(0, 120);\nreturn [{\n  json: { ok: !error, status: 400, error, uid, photoName, photoKey: photoName + '-' + String(photo?.fileSize ?? '') },\n  binary: item.binary,\n}];"
+      }
+    },
+    {
+      "id": "2660e438-9d54-4830-9c56-1b6663918bdb",
+      "name": "Photo valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        1400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "9d025a84-f5be-49be-9ead-cba999cbcef3",
+      "name": "Host photo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        672,
+        1304
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.imgbb.com/1/upload",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "image",
+              "inputDataFieldName": "photo"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "Gj6JKQ7xYJ77lJjV",
+          "name": "Query Auth account 2"
+        }
+      }
+    },
+    {
+      "id": "c02da6e4-9f19-4a12-8c1d-6c40574d01b5",
+      "name": "Photo params",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        896,
+        1256
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "uid",
+              "name": "uid",
+              "value": "={{ $('Photo input').first().json.uid }}",
+              "type": "string"
+            },
+            {
+              "id": "event",
+              "name": "event",
+              "value": "photo",
+              "type": "string"
+            },
+            {
+              "id": "photoUrl",
+              "name": "photoUrl",
+              "value": "={{ $json.data.url }}",
+              "type": "string"
+            },
+            {
+              "id": "photoName",
+              "name": "photoName",
+              "value": "={{ $('Photo input').first().json.photoName }}",
+              "type": "string"
+            },
+            {
+              "id": "photoKey",
+              "name": "photoKey",
+              "value": "={{ $('Photo input').first().json.photoKey }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "58107dcb-2c68-4e47-94b2-ae8acc3d4426",
+      "name": "Progress: photo",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        1120,
+        1256
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "H1Vph6YPLiNFlEoN"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "22d5b44a-3979-4831-940a-71520dd3daa3",
+      "name": "Log photo in chat",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        1256
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "g2m_messages"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "uid",
+              "displayName": "uid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "role",
+              "displayName": "role",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "text",
+              "displayName": "text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "brief",
+              "displayName": "brief",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "value": {
+            "uid": "={{ $('Photo params').first().json.uid }}",
+            "role": "photo",
+            "text": "={{ $('Photo params').first().json.photoUrl }}",
+            "brief": ""
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c8fc10ee-5fca-40c5-8f35-cff5e84d3dd3",
+      "name": "Respond photo",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1568,
+        1256
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, data: { progress: $('Progress: photo').first().json.progress, gained: $('Progress: photo').first().json.gained, leveledUp: $('Progress: photo').first().json.leveledUp }, error: null } }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "00f10364-65c7-4208-b711-d39eb6f970b7",
+      "name": "Respond photo failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        896,
+        1448
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{ \"success\": false, \"data\": null, \"error\": \"We couldn't store that photo. Try again.\" }",
+        "options": {
+          "responseCode": 500
+        }
+      }
+    },
+    {
+      "id": "ff892b2b-97af-405b-9017-d8f2160d8c73",
+      "name": "Respond photo error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        1500
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, data: null, error: $json.error } }}",
+        "options": {
+          "responseCode": 400
+        }
+      }
+    },
+    {
+      "id": "f716ea04-46e3-4b2d-bd50-a36771338282",
+      "name": "Parse reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1700,
+        600
+      ],
+      "parameters": {
+        "jsCode": "// The model returns JSON; fall back to plain text so a formatting slip never breaks the chat.\nconst raw = String($input.first().json.output ?? '').trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nlet out;\ntry {\n  out = JSON.parse(raw);\n} catch {\n  out = { reply: raw, brief: null };\n}\nconst b = out.brief;\nconst brief = b && b.title && b.description\n  ? { title: String(b.title).slice(0, 80), description: String(b.description).slice(0, 600) }\n  : null;\nconst reply = String(out.reply ?? '').trim() || 'Tell me a little more about your product.';\nreturn [{ json: { reply, brief } }];"
+      }
     }
   ],
   "connections": {
@@ -1141,7 +1435,7 @@
       "main": [
         [
           {
-            "node": "Save turn",
+            "node": "Parse reply",
             "type": "main",
             "index": 0
           }
@@ -1161,17 +1455,6 @@
           {
             "node": "Art director",
             "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Reply format": {
-      "ai_outputParser": [
-        [
-          {
-            "node": "Art director",
-            "type": "ai_outputParser",
             "index": 0
           }
         ]
@@ -1340,6 +1623,108 @@
           }
         ]
       ]
+    },
+    "Photo webhook": {
+      "main": [
+        [
+          {
+            "node": "Photo input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Photo input": {
+      "main": [
+        [
+          {
+            "node": "Photo valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Photo valid?": {
+      "main": [
+        [
+          {
+            "node": "Host photo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond photo error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Host photo": {
+      "main": [
+        [
+          {
+            "node": "Photo params",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond photo failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Photo params": {
+      "main": [
+        [
+          {
+            "node": "Progress: photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Progress: photo": {
+      "main": [
+        [
+          {
+            "node": "Log photo in chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log photo in chat": {
+      "main": [
+        [
+          {
+            "node": "Respond photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse reply": {
+      "main": [
+        [
+          {
+            "node": "Save turn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -1392,7 +1777,7 @@
         "Recent history",
         "Art director",
         "Gpt-4.1",
-        "Reply format",
+        "Parse reply",
         "Save turn",
         "Insert messages",
         "Respond chat",
@@ -1401,6 +1786,22 @@
         "Respond agent down"
       ],
       "description": "Awards message XP, enforces the daily cap, answers with the art director (reply + optional brief) and saves both turns."
+    },
+    {
+      "id": "8a09dfde-7e39-44fa-97d0-1237dedc148e",
+      "name": "Photo: upload once",
+      "nodeNames": [
+        "Photo input",
+        "Photo valid?",
+        "Host photo",
+        "Photo params",
+        "Progress: photo",
+        "Log photo in chat",
+        "Respond photo",
+        "Respond photo failed",
+        "Respond photo error"
+      ],
+      "description": "Hosts the product photo on imgbb, saves it on the user (+30 XP once per photo) and logs it in the chat."
     }
   ]
 }

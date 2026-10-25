@@ -29,6 +29,8 @@ export type Progress = {
   ads: number;
   streak: number;
   email: string | null;
+  // The product photo on file, reused for every shoot.
+  photo: { url: string; name: string } | null;
   unlocks: { formats: Aspect[]; styles: Style[]; direction: boolean; signature: boolean };
 };
 
@@ -36,8 +38,8 @@ export type Brief = { title: string; description: string };
 
 export type ChatMessage = {
   id: number | string;
-  role: "user" | "assistant" | "shoot";
-  // For "shoot" messages this is the jobId.
+  role: "user" | "assistant" | "shoot" | "photo";
+  // For "shoot" messages this is the jobId, for "photo" messages the image URL.
   text: string;
   brief: Brief | null;
 };

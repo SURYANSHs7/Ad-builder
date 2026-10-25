@@ -35,7 +35,7 @@
         320
       ],
       "parameters": {
-        "jsCode": "// Validate the upload and mint a job id the frontend can poll with.\nconst item = $input.first();\nconst body = item.json.body ?? {};\nconst photo = item.binary?.photo;\n\nconst SIZES = { square: '1024x1024', portrait: '1024x1536', landscape: '1536x1024' };\nconst STYLES = {\n  auto: '',\n  'luxe-dark': 'Luxe dark: low-key light, black stone or velvet, dramatic rim light, gold or deep jewel-tone accents.',\n  sunlit: 'Sunlit: warm golden-hour daylight, Mediterranean stone or linen, crisp natural shadows, airy and optimistic.',\n  'minimal-studio': 'Minimal studio: one or two sculptural podiums in a bold colour that complements the product, soft gradient light. A designed set, never a plain white background.',\n  nature: 'Nature: an outdoor natural setting that suits the product (moss, water, sand, leaves or stone), natural light.',\n  neon: 'Neon: dark reflective set with saturated neon accent lighting and a futuristic night-time mood.',\n};\n\nconst uid = String(body.uid ?? '');\nconst title = String(body.title ?? '').trim().slice(0, 80);\nconst description = String(body.description ?? '').trim().slice(0, 600);\nconst aspect = String(body.aspect || 'square');\nconst style = String(body.style || 'auto');\nconst direction = String(body.direction ?? '').trim().slice(0, 300);\n\nlet error = null;\nif (!/^[a-z0-9]{24}$/.test(uid)) error = 'Invalid session.';\nelse if (!title) error = 'Product name is required.';\nelse if (!photo) error = 'Product photo is required.';\nelse if (!String(photo.mimeType ?? '').startsWith('image/')) error = 'Photo must be an image.';\nelse if (!(aspect in SIZES) || !(style in STYLES)) error = 'Unknown format or style.';\n\nconst chars = 'abcdefghijklmnopqrstuvwxyz0123456789';\nconst jobId = Array.from({ length: 24 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');\n\nreturn [{ json: { ok: !error, status: 400, error, jobId, uid, event: 'spend', title, description, aspect, style, direction, size: SIZES[aspect], styleHint: STYLES[style] ?? '' } }];"
+        "jsCode": "// Validate the request and mint a job id the frontend can poll with.\n// The product photo is stored on the user (g2m-photo) and checked by Progress: spend.\nconst body = $input.first().json.body ?? {};\n\nconst SIZES = { square: '1024x1024', portrait: '1024x1536', landscape: '1536x1024' };\nconst STYLES = {\n  auto: '',\n  'luxe-dark': 'Luxe dark: low-key light, black stone or velvet, dramatic rim light, gold or deep jewel-tone accents.',\n  sunlit: 'Sunlit: warm golden-hour daylight, Mediterranean stone or linen, crisp natural shadows, airy and optimistic.',\n  'minimal-studio': 'Minimal studio: one or two sculptural podiums in a bold colour that complements the product, soft gradient light. A designed set, never a plain white background.',\n  nature: 'Nature: an outdoor natural setting that suits the product (moss, water, sand, leaves or stone), natural light.',\n  neon: 'Neon: dark reflective set with saturated neon accent lighting and a futuristic night-time mood.',\n};\n\nconst uid = String(body.uid ?? '');\nconst title = String(body.title ?? '').trim().slice(0, 80);\nconst description = String(body.description ?? '').trim().slice(0, 600);\nconst aspect = String(body.aspect || 'square');\nconst style = String(body.style || 'auto');\nconst direction = String(body.direction ?? '').trim().slice(0, 300);\n\nlet error = null;\nif (!/^[a-z0-9]{24}$/.test(uid)) error = 'Invalid session.';\nelse if (!title) error = 'Product name is required.';\nelse if (!(aspect in SIZES) || !(style in STYLES)) error = 'Unknown format or style.';\n\nconst chars = 'abcdefghijklmnopqrstuvwxyz0123456789';\nconst jobId = Array.from({ length: 24 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');\n\nreturn [{ json: { ok: !error, status: 400, error, jobId, uid, event: 'spend', title, description, aspect, style, direction, size: SIZES[aspect], styleHint: STYLES[style] ?? '' } }];"
       }
     },
     {
@@ -397,19 +397,6 @@
       }
     },
     {
-      "id": "fc709cce-eda0-46af-91b9-9b18e8cb50e9",
-      "name": "Attach photo",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1376,
-        256
-      ],
-      "parameters": {
-        "jsCode": "// The agent and data table drop binaries, so re-attach the uploaded photo.\nreturn [{\n  json: { prompt: $('Write prompt').first().json.output },\n  binary: $('Webhook').first().binary,\n}];"
-      }
-    },
-    {
       "id": "59b8e462-8a52-4ccd-adcd-28f455386394",
       "name": "Generate image",
       "type": "n8n-nodes-base.httpRequest",
@@ -434,7 +421,7 @@
             },
             {
               "name": "prompt",
-              "value": "={{ $json.prompt }}"
+              "value": "={{ $('Write prompt').first().json.output }}"
             },
             {
               "name": "model",
@@ -919,6 +906,31 @@
           "responseCode": 404
         }
       }
+    },
+    {
+      "id": "94c707c3-061b-46b3-b6bd-200af4a569f9",
+      "name": "Download photo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1376,
+        256
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Progress: spend').first().json.progress.photo.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "photo"
+            }
+          }
+        }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 2
     }
   ],
   "connections": {
@@ -1048,28 +1060,6 @@
           {
             "node": "Write prompt",
             "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Status: photo": {
-      "main": [
-        [
-          {
-            "node": "Attach photo",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Attach photo": {
-      "main": [
-        [
-          {
-            "node": "Generate image",
-            "type": "main",
             "index": 0
           }
         ]
@@ -1216,6 +1206,35 @@
           }
         ]
       ]
+    },
+    "Status: photo": {
+      "main": [
+        [
+          {
+            "node": "Download photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download photo": {
+      "main": [
+        [
+          {
+            "node": "Generate image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Status: failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -1245,7 +1264,7 @@
         "Write prompt",
         "Gpt-4.1",
         "Status: photo",
-        "Attach photo",
+        "Download photo",
         "Generate image",
         "Convert to File",
         "Upload to imgbb",

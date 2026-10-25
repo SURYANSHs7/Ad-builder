@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Paperclip, X } from "lucide-react";
+import { ArrowUp, Loader2, Paperclip } from "lucide-react";
 import type { Brief, ChatMessage, ChatReply, N8nResponse, Progress, Reward } from "@/lib/n8n";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -15,9 +15,6 @@ const STARTERS = [
   "What can you do for my brand?",
 ];
 
-type Message = ChatMessage & { photoUrl?: string };
-type Photo = { file: File; url: string; key: string };
-
 type Props = {
   initialMessages: ChatMessage[];
   progress: Progress;
@@ -28,11 +25,10 @@ type Props = {
 };
 
 export function Chat({ initialMessages, progress, gain, onReward, onShootFinished, onMerged }: Props) {
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [text, setText] = useState("");
-  const [photo, setPhoto] = useState<Photo | null>(null);
-  const [photoSent, setPhotoSent] = useState(false);
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -40,38 +36,36 @@ export function Chat({ initialMessages, progress, gain, onReward, onShootFinishe
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages.length, sending]);
+  }, [messages.length, sending, uploading]);
 
   // The newest brief stays actionable until it has been shot.
   const lastShoot = messages.findLastIndex((m) => m.role === "shoot");
   const activeBrief = messages.findLastIndex((m, i) => m.role === "assistant" && m.brief && i > lastShoot);
 
-  function push(m: Omit<Message, "id">) {
+  function push(m: Omit<ChatMessage, "id">) {
     const message = { ...m, id: `local-${localId.current++}` };
     setMessages((prev) => [...prev, message]);
     return message.id;
   }
 
   async function send(raw: string) {
-    const attachNow = photo && !photoSent ? photo : null;
-    const body = raw.trim() || (attachNow ? "Here's my product photo." : "");
+    const body = raw.trim();
     if (!body || sending) return;
 
     setSending(true);
     setError(null);
     setText("");
-    const id = push({ role: "user", text: body, brief: null, photoUrl: attachNow?.url });
+    const id = push({ role: "user", text: body, brief: null });
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: body, hasPhoto: photo !== null, photoKey: photo?.key ?? "" }),
+        body: JSON.stringify({ text: body }),
       });
       const json = (await res.json()) as N8nResponse<ChatReply>;
       if (json.data?.progress) onReward(json.data);
       if (!json.success || !json.data?.reply) throw new Error(json.error ?? "Something went wrong.");
-      if (attachNow) setPhotoSent(true);
       push({ role: "assistant", text: json.data.reply, brief: json.data.brief });
     } catch (err) {
       setMessages((prev) => prev.filter((m) => m.id !== id));
@@ -82,26 +76,42 @@ export function Chat({ initialMessages, progress, gain, onReward, onShootFinishe
     }
   }
 
-  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+  // The photo is uploaded once and kept on the visitor's profile for every shoot.
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
     if (!file.type.startsWith("image/")) return setError("Photo must be an image.");
     if (file.size > MAX_PHOTO_BYTES) return setError("Photo must be under 4 MB.");
+
+    setUploading(true);
     setError(null);
-    setPhoto({ file, url: URL.createObjectURL(file), key: `${file.name}-${file.size}` });
-    setPhotoSent(false);
+    try {
+      const form = new FormData();
+      form.append("photo", file, file.name);
+      const res = await fetch("/api/photo", { method: "POST", body: form });
+      const json = (await res.json()) as N8nResponse<Reward>;
+      if (!json.success || !json.data?.progress.photo) throw new Error(json.error ?? "Couldn't upload that photo.");
+      onReward(json.data);
+      push({ role: "photo", text: json.data.progress.photo.url, brief: null });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't upload that photo.");
+    } finally {
+      setUploading(false);
+    }
   }
 
   function onShot(jobId: string, brief: Brief | null) {
     push({ role: "shoot", text: jobId, brief });
   }
 
+  const attach = () => fileRef.current?.click();
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-[680px] flex-col gap-7 px-4 py-10 sm:px-6">
-          {messages.length === 0 && !sending ? (
+          {messages.length === 0 && !sending && !uploading ? (
             <Welcome onPick={send} />
           ) : (
             messages.map((m, i) =>
@@ -114,8 +124,7 @@ export function Chat({ initialMessages, progress, gain, onReward, onShootFinishe
                     <BriefCard
                       brief={m.brief}
                       progress={progress}
-                      photo={photo?.file ?? null}
-                      onAttach={() => fileRef.current?.click()}
+                      onAttach={attach}
                       onShot={(jobId) => onShot(jobId, m.brief)}
                       onReward={onReward}
                       onMerged={onMerged}
@@ -125,6 +134,7 @@ export function Chat({ initialMessages, progress, gain, onReward, onShootFinishe
               ),
             )
           )}
+          {uploading && <UploadingBubble />}
           {sending && <Typing />}
           <div ref={endRef} />
         </div>
@@ -143,22 +153,29 @@ export function Chat({ initialMessages, progress, gain, onReward, onShootFinishe
           }}
           className="rounded-2xl border bg-card shadow-[0_1px_2px_oklch(0_0_0/0.04)] transition focus-within:border-foreground/30"
         >
-          {photo && (
+          {progress.photo && (
             <div className="flex items-center gap-3 border-b px-3 py-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={photo.url} alt="" className="size-10 rounded-md border object-cover" />
+              <img src={progress.photo.url} alt="" className="size-9 rounded-md border object-cover" />
               <div className="min-w-0 flex-1 text-xs">
-                <p className="truncate font-medium">{photo.file.name}</p>
-                <p className="text-muted-foreground">{photoSent ? "Product photo, ready to shoot" : "Sends with your next message"}</p>
+                <p className="truncate font-medium">Product photo</p>
+                <p className="text-muted-foreground">On file, used for every shoot</p>
               </div>
-              <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove photo" onClick={() => { setPhoto(null); setPhotoSent(false); }}>
-                <X />
+              <Button type="button" variant="ghost" size="sm" onClick={attach} disabled={uploading}>
+                Replace
               </Button>
             </div>
           )}
           <div className="flex items-end gap-1.5 p-2">
-            <Button type="button" variant="ghost" size="icon" aria-label="Attach product photo" onClick={() => fileRef.current?.click()}>
-              <Paperclip />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={progress.photo ? "Replace product photo" : "Attach product photo"}
+              onClick={attach}
+              disabled={uploading}
+            >
+              {uploading ? <Loader2 className="animate-spin" /> : <Paperclip />}
             </Button>
             <textarea
               value={text}
@@ -175,7 +192,7 @@ export function Chat({ initialMessages, progress, gain, onReward, onShootFinishe
               aria-label="Message"
               className="max-h-40 min-h-8 flex-1 resize-none bg-transparent py-1.5 text-[15px] outline-none [field-sizing:content] placeholder:text-muted-foreground"
             />
-            <Button type="submit" size="icon" aria-label="Send" disabled={sending || (!text.trim() && !(photo && !photoSent))}>
+            <Button type="submit" size="icon" aria-label="Send" disabled={sending || !text.trim()}>
               <ArrowUp />
             </Button>
           </div>
@@ -194,16 +211,21 @@ export function Chat({ initialMessages, progress, gain, onReward, onShootFinishe
   );
 }
 
-function Bubble({ message }: { message: Message }) {
+function Bubble({ message }: { message: ChatMessage }) {
+  if (message.role === "photo") {
+    return (
+      <div className="flex flex-col items-end gap-1.5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={message.text} alt="Your product photo" className="max-h-56 rounded-xl border object-cover" />
+        <span className="text-[11px] text-muted-foreground">Product photo saved</span>
+      </div>
+    );
+  }
   if (message.role === "user") {
     return (
-      <div className="flex flex-col items-end gap-2">
-        {message.photoUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={message.photoUrl} alt="Your product photo" className="max-h-48 rounded-xl border object-cover" />
-        )}
-        <p className="max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap">{message.text}</p>
-      </div>
+      <p className="max-w-[85%] self-end rounded-2xl bg-muted px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap">
+        {message.text}
+      </p>
     );
   }
   return (
@@ -216,6 +238,14 @@ function Bubble({ message }: { message: Message }) {
 
 function Label() {
   return <p className="mb-1.5 text-[11px] font-medium tracking-[0.16em] text-muted-foreground uppercase">Art director</p>;
+}
+
+function UploadingBubble() {
+  return (
+    <div className="flex items-center gap-2 self-end text-sm text-muted-foreground" aria-live="polite">
+      <Loader2 className="size-4 animate-spin" /> Saving your product photo…
+    </div>
+  );
 }
 
 function Typing() {

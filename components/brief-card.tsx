@@ -12,14 +12,13 @@ import { EmailGate } from "@/components/email-gate";
 type Props = {
   brief: Brief;
   progress: Progress;
-  photo: File | null;
   onAttach: () => void;
   onShot: (jobId: string, progress: Progress) => void;
   onReward: (r: Reward) => void;
   onMerged: () => void;
 };
 
-export function BriefCard({ brief, progress, photo, onAttach, onShot, onReward, onMerged }: Props) {
+export function BriefCard({ brief, progress, onAttach, onShot, onReward, onMerged }: Props) {
   const [aspect, setAspect] = useState<Aspect>("square");
   const [style, setStyle] = useState<Style>("auto");
   const [direction, setDirection] = useState("");
@@ -30,18 +29,20 @@ export function BriefCard({ brief, progress, photo, onAttach, onShot, onReward, 
   const toNext = progress.nextXp === null ? null : progress.nextXp - progress.xp;
 
   async function shoot() {
-    if (!photo) return;
     setBusy(true);
     setError(null);
-    const form = new FormData();
-    form.append("title", brief.title);
-    form.append("description", brief.description);
-    form.append("aspect", aspect);
-    form.append("style", style);
-    if (canDirect) form.append("direction", direction);
-    form.append("photo", photo, photo.name);
     try {
-      const res = await fetch("/api/generate", { method: "POST", body: form });
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: brief.title,
+          description: brief.description,
+          aspect,
+          style,
+          direction: canDirect ? direction : "",
+        }),
+      });
       const json = (await res.json()) as N8nResponse<{ jobId: string; progress: Progress }>;
       if (json.data?.progress) onReward({ progress: json.data.progress });
       if (!json.success || !json.data?.jobId) throw new Error(json.error ?? "Something went wrong.");
@@ -111,7 +112,7 @@ export function BriefCard({ brief, progress, photo, onAttach, onShot, onReward, 
       <footer className="flex flex-col gap-3 border-t px-4 py-4">
         {!progress.email ? (
           <EmailGate onReward={onReward} onMerged={onMerged} />
-        ) : !photo ? (
+        ) : !progress.photo ? (
           <Button variant="outline" size="lg" onClick={onAttach} className="h-10 self-start">
             <ImagePlus /> Attach your product photo
           </Button>

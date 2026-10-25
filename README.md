@@ -9,15 +9,15 @@ A chat with an AI art director that turns a product photo into a campaign-ready 
 ## Workflows (n8n)
 | File | n8n workflow | Webhooks |
 |---|---|---|
-| `workflow-chat.json` | Go 2 Market Chat | `g2m-me`, `g2m-chat`, `g2m-email` |
+| `workflow-chat.json` | Go 2 Market Chat | `g2m-me`, `g2m-chat`, `g2m-email`, `g2m-photo` |
 | `workflow.json` | Go 2 Market v3 | `go-2-market-v3`, `go-2-market-v3-status` |
 | `workflow-progress.json` | Go 2 Market · Progress (sub-workflow) | none |
 
-**Go 2 Market · Progress** is the only place that changes XP, levels, credits and unlocks. The other two call it with one event: `visit`, `message`, `setCode`, `verify`, `spend`, `ad` or `refund`.
+**Go 2 Market · Progress** is the only place that changes XP, levels, credits and unlocks. The other two call it with one event: `visit`, `message`, `photo`, `setCode`, `verify`, `spend`, `ad` or `refund`.
 
 Data Tables:
-- **`g2m_users`**: `uid, email, emailVerified, codeHash, codeExpires, codeTries, xp, credits, level, messages, ads, rewardedToday, sentToday, activeDate, streak, lastText, photoRewarded`
-- **`g2m_messages`**: `uid, role (user | assistant | shoot), text, brief (JSON string)`
+- **`g2m_users`**: `uid, email, emailVerified, codeHash, codeExpires, codeTries, xp, credits, level, messages, ads, rewardedToday, sentToday, activeDate, streak, lastText, photoRewarded, photoUrl, photoName`
+- **`g2m_messages`**: `uid, role (user | assistant | shoot | photo), text, brief (JSON string)`
 - **`go2market_jobs`**: `jobId, status, prompt, imageUrl, error, uid, title, aspect, style`
 
 All webhooks are `POST` with Header Auth (`x-api-key`). Every response uses the shape `{ success, data, error }`.
@@ -28,7 +28,7 @@ All webhooks are `POST` with Header Auth (`x-api-key`). Every response uses the 
 3. Pick credentials:
    - Header Auth on all webhooks.
    - OpenAI on the models and on Generate image.
-   - Query Auth on imgbb.
+   - Query Auth on imgbb (Host photo, Upload to imgbb).
    - Gmail on Send code / Send email.
 4. Publish all three workflows.
 
@@ -59,6 +59,7 @@ A shoot costs 1 credit. Failed shoots are refunded.
 ```json
 { "level": 2, "title": "Junior Creative", "xp": 140, "levelXp": 100, "nextXp": 250, "nextTitle": "Art Director",
   "credits": 1, "messages": 9, "ads": 1, "streak": 2, "email": "a@b.co" | null,
+  "photo": { "url": "https://i.ibb.co/…", "name": "bottle.png" } | null,
   "unlocks": { "formats": ["square","portrait","landscape"], "styles": ["auto"], "direction": false, "signature": false } }
 ```
 
@@ -68,14 +69,23 @@ Request: `{ "uid": "<24 chars a-z0-9>" }`
 Response: `{ progress, messages: [{ id, role, text, brief }], ads: [{ jobId, title, imageUrl, prompt, createdAt }] }`
 
 ### `g2m-chat`: send a message
-Request: `{ "uid", "text" (1–1000 chars), "hasPhoto": bool, "photoKey": "name-size" }`
+Request: `{ "uid", "text" (1–1000 chars) }`. The agent is told whether a product photo is on file, so it never asks twice.
 
 Response: `{ reply, brief: { title, description } | null, progress, gained, leveledUp }`
 
 Errors:
 - `400`: invalid input.
 - `429`: daily limit.
-- `502`: agent unavailable. `data.progress` is still returned.
+- `500`: agent unavailable. `data.progress` is still returned.
+
+### `g2m-photo`: save the product photo
+Request (`multipart/form-data`): `uid`, `photo` (image ≤ 4 MB).
+
+- The photo is hosted on imgbb and saved on the visitor as `progress.photo`.
+- Every shoot reuses it until the visitor replaces it.
+- A new photo earns +30 XP once.
+
+Response: `{ progress, gained, leveledUp }`. Returns `400` for invalid input and `500` if hosting fails.
 
 ### `g2m-email`: verify an email
 Request: `{ "uid", "action": "start", "email" }`. Response: `{ sent: true, progress }`.
@@ -94,12 +104,13 @@ Request (`multipart/form-data`):
 - `aspect` (`square` | `portrait` | `landscape`)
 - `style` (`auto` | `luxe-dark` | `sunlit` | `minimal-studio` | `nature` | `neon`)
 - `direction` (level 4+)
-- `photo` (image ≤ 4 MB)
+
+The product photo is downloaded from `progress.photo.url`.
 
 Response, returned immediately while generation continues: `{ jobId, progress }`.
 
 Errors:
-- `400`: invalid input.
+- `400`: invalid input or no photo on file.
 - `402`: no shoots left.
 - `403`: email not verified, or a locked format/style/direction.
 
@@ -116,9 +127,10 @@ The browser only talks to these routes. They read the visitor id from the httpOn
 | `GET /api/me` | `g2m-me` (sets the cookie on first visit) |
 | `POST /api/chat` | `g2m-chat` |
 | `POST /api/email` | `g2m-email` |
+| `POST /api/photo` | `g2m-photo` |
 | `POST /api/generate` | `go-2-market-v3` |
 | `GET /api/status/<jobId>` | `go-2-market-v3-status` |
 
 ## Run locally
-1. Copy `.env.example` to `.env.local` and fill in the six variables (all server-only).
+1. Copy `.env.example` to `.env.local` and fill in the seven variables (all server-only).
 2. Run `npm install && npm run dev`, then open http://localhost:3000.
