@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   if (!uid) return noSession();
 
   const body = await request.json().catch(() => null);
-  const action = body?.action === "verify" ? "verify" : "start";
+  const action = body?.action === "verify" || body?.action === "pro" ? body.action : "start";
 
   const { status, body: result } = await callWebhook<EmailResult>(process.env.N8N_EMAIL_URL, {
     uid,

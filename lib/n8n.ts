@@ -28,6 +28,12 @@ export type Progress = {
   messages: number;
   ads: number;
   streak: number;
+  // Shoots started today and the daily cap (2, or more for Pro members).
+  shootsToday: number;
+  dailyLimit: number;
+  pro: boolean;
+  // On the Pro waitlist.
+  proInterest: boolean;
   email: string | null;
   // The product photo on file, reused for every shoot.
   photo: { url: string; name: string } | null;

@@ -590,7 +590,7 @@
         1248
       ],
       "parameters": {
-        "jsCode": "const body = $input.first().json.body ?? {};\nconst uid = String(body.uid ?? '');\nconst action = String(body.action ?? '');\nconst email = String(body.email ?? '').trim().toLowerCase();\nconst code = String(body.code ?? '').trim();\n\nlet error = null;\nif (!/^[a-z0-9]{24}$/.test(uid)) error = 'Invalid session.';\nelse if (action !== 'start' && action !== 'verify') error = 'Unknown action.';\nelse if (action === 'start' && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) error = 'Enter a valid email.';\nelse if (action === 'verify' && !/^\\d{6}$/.test(code)) error = 'Enter the 6-digit code.';\n\nconst newCode = String(Math.floor(100000 + Math.random() * 900000));\nreturn [{ json: { ok: !error, status: 400, error, uid, action, email, code, newCode } }];"
+        "jsCode": "const body = $input.first().json.body ?? {};\nconst uid = String(body.uid ?? '');\nconst action = String(body.action ?? '');\nconst email = String(body.email ?? '').trim().toLowerCase();\nconst code = String(body.code ?? '').trim();\n\nlet error = null;\nif (!/^[a-z0-9]{24}$/.test(uid)) error = 'Invalid session.';\nelse if (!['start', 'verify', 'pro'].includes(action)) error = 'Unknown action.';\nelse if (action === 'start' && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) error = 'Enter a valid email.';\nelse if (action === 'verify' && !/^\\d{6}$/.test(code)) error = 'Enter the 6-digit code.';\n\nconst newCode = String(Math.floor(100000 + Math.random() * 900000));\nreturn [{ json: { ok: !error, status: 400, error, uid, action, email, code, newCode } }];"
       }
     },
     {
@@ -626,7 +626,7 @@
     },
     {
       "id": "41bc920d-7a80-459d-ac05-bb410911d61b",
-      "name": "Start or verify?",
+      "name": "Which action?",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
@@ -673,6 +673,27 @@
                       "operation": "equals"
                     },
                     "rightValue": "verify"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "pro",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "pro"
                   }
                 ],
                 "combinator": "and"
@@ -1275,6 +1296,133 @@
       "parameters": {
         "jsCode": "// The model returns JSON; fall back to plain text so a formatting slip never breaks the chat.\nconst raw = String($input.first().json.output ?? '').trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nlet out;\ntry {\n  out = JSON.parse(raw);\n} catch {\n  out = { reply: raw, brief: null };\n}\nconst b = out.brief;\nconst brief = b && b.title && b.description\n  ? { title: String(b.title).slice(0, 80), description: String(b.description).slice(0, 600) }\n  : null;\nconst reply = String(out.reply ?? '').trim() || 'Tell me a little more about your product.';\nreturn [{ json: { reply, brief } }];"
       }
+    },
+    {
+      "id": "ac3a9adc-76fd-483d-bac0-c4afcd927f7f",
+      "name": "Pro params",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        944,
+        1600
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "uid",
+              "name": "uid",
+              "value": "={{ $json.uid }}",
+              "type": "string"
+            },
+            {
+              "id": "event",
+              "name": "event",
+              "value": "pro",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "b3228d3e-0022-4f87-ab1e-2a760b5f6958",
+      "name": "Progress: pro",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        1168,
+        1600
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "H1Vph6YPLiNFlEoN"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "66d87d17-a8f5-4f0b-908c-9f2fa63c79b9",
+      "name": "New Pro lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1392,
+        1600
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.notify }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "005ff015-8951-44ea-9ef6-fc76447b12e9",
+      "name": "Notify owner",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1616,
+        1504
+      ],
+      "parameters": {
+        "sendTo": "suryansh.22singh22@gmail.com",
+        "subject": "={{ $json.progress.email }} wants Go 2 Market Pro",
+        "emailType": "text",
+        "message": "={{ $json.progress.email }} joined the Pro waitlist.\n\nLevel {{ $json.progress.level }} ({{ $json.progress.title }}), {{ $json.progress.ads }} ads made, {{ $json.progress.shootsToday }}/{{ $json.progress.dailyLimit }} shoots today.\n\nTo make them Pro, set pro = true on their row in the g2m_users data table.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "webhookId": "9fffb444-59dc-47b9-afd4-9228466ff234",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PD9n6O4Ac0w486Az",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "id": "6c131153-43b2-4fa9-a0a5-dca65354020c",
+      "name": "Respond pro",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1840,
+        1600
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: $('Progress: pro').first().json.ok, data: { progress: $('Progress: pro').first().json.progress }, error: $('Progress: pro').first().json.error } }}",
+        "options": {
+          "responseCode": "={{ $('Progress: pro').first().json.ok ? 200 : $('Progress: pro').first().json.status }}"
+        }
+      }
     }
   ],
   "connections": {
@@ -1508,7 +1656,7 @@
       "main": [
         [
           {
-            "node": "Start or verify?",
+            "node": "Which action?",
             "type": "main",
             "index": 0
           }
@@ -1516,24 +1664,6 @@
         [
           {
             "node": "Respond email error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Start or verify?": {
-      "main": [
-        [
-          {
-            "node": "Code params",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Find email owner",
             "type": "main",
             "index": 0
           }
@@ -1725,6 +1855,82 @@
           }
         ]
       ]
+    },
+    "Which action?": {
+      "main": [
+        [
+          {
+            "node": "Code params",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Find email owner",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pro params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pro params": {
+      "main": [
+        [
+          {
+            "node": "Progress: pro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Progress: pro": {
+      "main": [
+        [
+          {
+            "node": "New Pro lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New Pro lead?": {
+      "main": [
+        [
+          {
+            "node": "Notify owner",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond pro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify owner": {
+      "main": [
+        [
+          {
+            "node": "Respond pro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -1744,27 +1950,6 @@
         "Respond me error"
       ],
       "description": "Creates the user on first visit and returns progress, the last 40 messages and the last 12 ads."
-    },
-    {
-      "id": "3beb94e3-f932-45e6-921a-1552177a41c2",
-      "name": "Email: verify with a code",
-      "nodeNames": [
-        "Email input",
-        "Email valid?",
-        "Start or verify?",
-        "Code params",
-        "Progress: save code",
-        "Code saved?",
-        "Send code",
-        "Respond code sent",
-        "Respond code error",
-        "Find email owner",
-        "Verify params",
-        "Progress: verify",
-        "Respond verify",
-        "Respond email error"
-      ],
-      "description": "start emails a 6-digit code (hashed, 10 min). verify checks it, grants the free shoot, or returns mergedUid if the email is already owned."
     },
     {
       "id": "521fc83f-6b5d-455e-b60d-f50cea3461eb",
@@ -1802,6 +1987,32 @@
         "Respond photo error"
       ],
       "description": "Hosts the product photo on imgbb, saves it on the user (+30 XP once per photo) and logs it in the chat."
+    },
+    {
+      "id": "1a73fa23-ab21-412e-8829-49c5d997dddf",
+      "name": "Email: verify and Pro waitlist",
+      "nodeNames": [
+        "Email input",
+        "Email valid?",
+        "Which action?",
+        "Code params",
+        "Progress: save code",
+        "Code saved?",
+        "Send code",
+        "Respond code sent",
+        "Respond code error",
+        "Find email owner",
+        "Verify params",
+        "Progress: verify",
+        "Respond verify",
+        "Respond email error",
+        "Pro params",
+        "Progress: pro",
+        "New Pro lead?",
+        "Notify owner",
+        "Respond pro"
+      ],
+      "description": "g2m-email: start sends a 6-digit code, verify checks it (merging into an existing owner), pro joins the Pro waitlist and emails the owner once."
     }
   ]
 }

@@ -37,6 +37,11 @@ function LevelCard({ progress: p }: { progress: Progress }) {
       <div className="min-w-0">
         <p className="flex items-center gap-2 font-heading text-2xl leading-tight">
           <span key={p.title} className="animate-rise">{p.title}</span>
+          {p.pro && (
+            <span className="rounded-full bg-signal px-2 py-0.5 font-sans text-[10px] font-medium tracking-wider text-signal-foreground uppercase">
+              Pro
+            </span>
+          )}
           {p.unlocks.signature && (
             <span className="rounded-full border border-signal/40 px-2 py-0.5 font-sans text-[10px] font-medium tracking-wider text-signal uppercase">
               Signature
@@ -85,7 +90,7 @@ export function LevelRing({ progress, size = 76 }: { progress: Progress; size?: 
 
 function Stats({ progress: p }: { progress: Progress }) {
   const items = [
-    { label: "Shoots left", value: p.credits },
+    { label: "Shoots left", value: p.pro ? "Pro" : p.credits, note: `${p.shootsToday} / ${p.dailyLimit} used today` },
     { label: "Day streak", value: p.streak },
     { label: "Messages", value: p.messages },
     { label: "Ads made", value: p.ads },
@@ -96,6 +101,7 @@ function Stats({ progress: p }: { progress: Progress }) {
         <div key={item.label} className="bg-card px-4 py-3">
           <dt className="text-xs text-muted-foreground">{item.label}</dt>
           <dd className="mt-0.5 font-heading text-2xl tabular-nums">{item.value}</dd>
+          {item.note && <dd className="text-[11px] text-muted-foreground tabular-nums">{item.note}</dd>}
         </div>
       ))}
     </dl>
@@ -189,7 +195,7 @@ function Rules() {
           </div>
         ))}
       </dl>
-      <p className="mt-3 text-[11px] leading-snug text-muted-foreground">Up to 20 rewarded actions a day.</p>
+      <p className="mt-3 text-[11px] leading-snug text-muted-foreground">Up to 20 rewarded actions a day. Up to 2 shoots a day per email, more with Pro.</p>
     </section>
   );
 }

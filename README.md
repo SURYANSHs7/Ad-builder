@@ -3,7 +3,7 @@
 A chat with an AI art director that turns a product photo into a campaign-ready ad. Visitors earn XP for talking to us, level up, and unlock free shoots, formats and scene styles.
 
 - **Chat (left):** n8n AI Agent (GPT-4.1) interviews the visitor and returns a shoot brief once it has the product, a mood and a photo.
-- **Shoot (inline):** GPT-4.1 writes the scene prompt, `gpt-image-2` edits the photo, imgbb hosts it, and Gmail sends the link.
+- **Shoot (inline):** GPT-4.1 writes the scene prompt, `gpt-image-2` (quality `medium`, about $0.05 a shoot) edits the photo, imgbb hosts it, and Gmail sends the link.
 - **Tracker (right / mobile sheet):** level ring, stats, level ladder, gallery of finished ads.
 
 ## Workflows (n8n)
@@ -16,7 +16,7 @@ A chat with an AI art director that turns a product photo into a campaign-ready 
 **Go 2 Market · Progress** is the only place that changes XP, levels, credits and unlocks. The other two call it with one event: `visit`, `message`, `photo`, `setCode`, `verify`, `spend`, `ad` or `refund`.
 
 Data Tables:
-- **`g2m_users`**: `uid, email, emailVerified, codeHash, codeExpires, codeTries, xp, credits, level, messages, ads, rewardedToday, sentToday, activeDate, streak, lastText, photoRewarded, photoUrl, photoName`
+- **`g2m_users`**: `uid, email, emailVerified, codeHash, codeExpires, codeTries, xp, credits, level, messages, ads, rewardedToday, sentToday, activeDate, streak, lastText, photoRewarded, photoUrl, photoName, shootsToday, shootDate, pro (boolean), proInterest`
 - **`g2m_messages`**: `uid, role (user | assistant | shoot | photo), text, brief (JSON string)`
 - **`go2market_jobs`**: `jobId, status, prompt, imageUrl, error, uid, title, aspect, style`
 
@@ -53,12 +53,16 @@ Rewarded actions are capped at 20 a day. Messages are hard-capped at 60 a day.
 
 A shoot costs 1 credit. Failed shoots are refunded.
 
+Each email can start at most 2 shoots a day (UTC), even with credits left. **Pro** members get 20 a day and don't use credits. To make someone Pro, set `pro = true` on their `g2m_users` row. Visitors who hit the cap can join the Pro waitlist, which sets `proInterest` to the date and emails the owner once.
+
 ## Contract
 
 `progress` is returned by most webhooks:
 ```json
 { "level": 2, "title": "Junior Creative", "xp": 140, "levelXp": 100, "nextXp": 250, "nextTitle": "Art Director",
-  "credits": 1, "messages": 9, "ads": 1, "streak": 2, "email": "a@b.co" | null,
+  "credits": 1, "messages": 9, "ads": 1, "streak": 2,
+  "shootsToday": 1, "dailyLimit": 2, "pro": false, "proInterest": false,
+  "email": "a@b.co" | null,
   "photo": { "url": "https://i.ibb.co/…", "name": "bottle.png" } | null,
   "unlocks": { "formats": ["square","portrait","landscape"], "styles": ["auto"], "direction": false, "signature": false } }
 ```
@@ -87,10 +91,12 @@ Request (`multipart/form-data`): `uid`, `photo` (image ≤ 4 MB).
 
 Response: `{ progress, gained, leveledUp }`. Returns `400` for invalid input and `500` if hosting fails.
 
-### `g2m-email`: verify an email
+### `g2m-email`: verify an email, join the Pro waitlist
 Request: `{ "uid", "action": "start", "email" }`. Response: `{ sent: true, progress }`.
 
 Request: `{ "uid", "action": "verify", "code": "123456" }`. Response: `{ progress, mergedUid, gained, leveledUp }`.
+
+Request: `{ "uid", "action": "pro" }`. Response: `{ progress }` with `proInterest: true`. Returns `403` if the email isn't verified.
 
 - Codes are stored hashed, expire after 10 minutes, and allow 5 tries.
 - You can request one code per minute.
@@ -113,6 +119,7 @@ Errors:
 - `400`: invalid input or no photo on file.
 - `402`: no shoots left.
 - `403`: email not verified, or a locked format/style/direction.
+- `429`: today's shoot cap reached (2 a day, or 20 for Pro).
 
 ### `go-2-market-v3-status`: poll a shoot
 Request: `{ "jobId" }`

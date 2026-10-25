@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmailGate } from "@/components/email-gate";
+import { ProUpsell } from "@/components/pro-upsell";
 
 type Props = {
   brief: Brief;
@@ -116,7 +117,15 @@ export function BriefCard({ brief, progress, onAttach, onShot, onReward, onMerge
           <Button variant="outline" size="lg" onClick={onAttach} className="h-10 self-start">
             <ImagePlus /> Attach your product photo
           </Button>
-        ) : progress.credits < 1 ? (
+        ) : progress.shootsToday >= progress.dailyLimit ? (
+          progress.pro ? (
+            <p className="text-sm">
+              You&apos;ve used today&apos;s {progress.dailyLimit} shoots. <span className="text-muted-foreground">Come back tomorrow.</span>
+            </p>
+          ) : (
+            <ProUpsell progress={progress} onReward={onReward} />
+          )
+        ) : !progress.pro && progress.credits < 1 ? (
           <p className="text-sm">
             No shoots left.{" "}
             <span className="text-muted-foreground">
@@ -126,7 +135,8 @@ export function BriefCard({ brief, progress, onAttach, onShot, onReward, onMerge
         ) : (
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs text-muted-foreground tabular-nums">
-              Uses 1 of {progress.credits} shoot{progress.credits === 1 ? "" : "s"}
+              {progress.pro ? "Pro" : `Uses 1 of ${progress.credits} shoot${progress.credits === 1 ? "" : "s"}`}
+              {` · ${progress.shootsToday} of ${progress.dailyLimit} today`}
             </p>
             <Button size="lg" disabled={busy} onClick={shoot} className="h-10 bg-signal px-4 text-signal-foreground hover:bg-signal/90">
               {busy && <Loader2 className="animate-spin" />}
