@@ -1,0 +1,1274 @@
+{
+  "name": "Go 2 Market v3",
+  "nodes": [
+    {
+      "id": "60c8664e-fbda-43a5-93ab-090f75f17316",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "go-2-market-v3",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "05743ba9-e447-4d27-b0bc-1e6e2d922f5a",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "BmL6rw2CJE5ljL46",
+          "name": "Header Auth account 2"
+        }
+      }
+    },
+    {
+      "id": "67055a28-2663-4270-bddb-ce729e6895e9",
+      "name": "Validate input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        320
+      ],
+      "parameters": {
+        "jsCode": "// Validate the upload and mint a job id the frontend can poll with.\nconst item = $input.first();\nconst body = item.json.body ?? {};\nconst photo = item.binary?.photo;\n\nconst SIZES = { square: '1024x1024', portrait: '1024x1536', landscape: '1536x1024' };\nconst STYLES = {\n  auto: '',\n  'luxe-dark': 'Luxe dark: low-key light, black stone or velvet, dramatic rim light, gold or deep jewel-tone accents.',\n  sunlit: 'Sunlit: warm golden-hour daylight, Mediterranean stone or linen, crisp natural shadows, airy and optimistic.',\n  'minimal-studio': 'Minimal studio: one or two sculptural podiums in a bold colour that complements the product, soft gradient light. A designed set, never a plain white background.',\n  nature: 'Nature: an outdoor natural setting that suits the product (moss, water, sand, leaves or stone), natural light.',\n  neon: 'Neon: dark reflective set with saturated neon accent lighting and a futuristic night-time mood.',\n};\n\nconst uid = String(body.uid ?? '');\nconst title = String(body.title ?? '').trim().slice(0, 80);\nconst description = String(body.description ?? '').trim().slice(0, 600);\nconst aspect = String(body.aspect || 'square');\nconst style = String(body.style || 'auto');\nconst direction = String(body.direction ?? '').trim().slice(0, 300);\n\nlet error = null;\nif (!/^[a-z0-9]{24}$/.test(uid)) error = 'Invalid session.';\nelse if (!title) error = 'Product name is required.';\nelse if (!photo) error = 'Product photo is required.';\nelse if (!String(photo.mimeType ?? '').startsWith('image/')) error = 'Photo must be an image.';\nelse if (!(aspect in SIZES) || !(style in STYLES)) error = 'Unknown format or style.';\n\nconst chars = 'abcdefghijklmnopqrstuvwxyz0123456789';\nconst jobId = Array.from({ length: 24 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');\n\nreturn [{ json: { ok: !error, status: 400, error, jobId, uid, event: 'spend', title, description, aspect, style, direction, size: SIZES[aspect], styleHint: STYLES[style] ?? '' } }];"
+      }
+    },
+    {
+      "id": "9914dff4-92ef-4a4d-bbbb-625ed9555a85",
+      "name": "Is valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        496,
+        320
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "b7b7147a-1d48-4a49-8646-af61e23c9c17",
+      "name": "Progress: spend",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        720,
+        224
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "H1Vph6YPLiNFlEoN"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "7a800657-36c4-4923-953a-8617d094206e",
+      "name": "Can shoot?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        944,
+        224
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "5f0c239d-c5c3-44c9-9498-1a2af08fe56c",
+      "name": "Create job",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1168,
+        128
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "go2market_jobs"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "jobId",
+              "displayName": "jobId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "uid",
+              "displayName": "uid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "aspect",
+              "displayName": "aspect",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style",
+              "displayName": "style",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "value": {
+            "jobId": "={{ $('Validate input').first().json.jobId }}",
+            "status": "prompt",
+            "uid": "={{ $('Validate input').first().json.uid }}",
+            "title": "={{ $('Validate input').first().json.title }}",
+            "aspect": "={{ $('Validate input').first().json.aspect }}",
+            "style": "={{ $('Validate input').first().json.style }}"
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "09836243-d86c-4b81-9c00-aaf6e52f9566",
+      "name": "Log shoot in chat",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1392,
+        128
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "g2m_messages"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "uid",
+              "displayName": "uid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "role",
+              "displayName": "role",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "text",
+              "displayName": "text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "brief",
+              "displayName": "brief",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "value": {
+            "uid": "={{ $('Validate input').first().json.uid }}",
+            "role": "shoot",
+            "text": "={{ $('Validate input').first().json.jobId }}",
+            "brief": "={{ JSON.stringify({ title: $('Validate input').first().json.title, description: $('Validate input').first().json.description }) }}"
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "7b074707-3715-45a2-aa59-90e4bd457fdc",
+      "name": "Respond job id",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1616,
+        128
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, data: { jobId: $('Validate input').first().json.jobId, progress: $('Progress: spend').first().json.progress }, error: null } }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "ccf6eeff-81f5-4894-a82a-c88295074da6",
+      "name": "Write prompt",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        800,
+        320
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Product: {{ $('Validate input').first().json.title }}\nDescription: {{ $('Validate input').first().json.description }}\nFormat: {{ $('Validate input').first().json.aspect }}\n{{ $('Validate input').first().json.styleHint ? 'Scene style: ' + $('Validate input').first().json.styleHint : '' }}\n{{ $('Validate input').first().json.direction ? 'Art direction from the client: ' + $('Validate input').first().json.direction : '' }}",
+        "options": {
+          "systemMessage": "# Role\n\nYou are a world-class advertising art director and an expert prompt engineer for AI image editing. You turn a plain product photo into a scroll-stopping advertising image, like a premium brand's campaign shot.\n\n# Task\n\nGiven a product name and description, write ONE prompt for an image-editing model. The model receives the user's original product photo and your prompt. It must keep the product exactly as it is and build a rich advertising scene around it.\n\n# The scene (most important)\n\n* Never use a plain white, plain grey or empty studio background. Every image needs a designed, atmospheric scene.\n* If a scene style is given, build the scene in that style. If art direction from the client is given, follow it unless it conflicts with the product rules below.\n* Otherwise pick a setting that tells the product's story and suits its category, mood and target buyer. For example:\n  - Fragrance / cologne: bottle on a slab of wet black marble or volcanic rock, water droplets and a subtle splash, dramatic rim light, smoky amber or deep ocean tones; or sunlit Mediterranean stone with citrus and fig leaves.\n  - Skincare / beauty: glossy water ripples, soft pastel podiums, botanicals, morning light through a window.\n  - Tech / gadgets: sleek dark surface with reflective floor, neon or cool blue accent lighting, futuristic minimal set.\n  - Food / drink: rustic wood or stone, fresh ingredients scattered artfully, condensation, warm natural light.\n  - Fashion / accessories: textured fabrics, leather, travertine, editorial shadows from palm leaves or window blinds.\n  - Home / kitchen: styled luxury interior countertop, soft daylight, tasteful props.\n* Add 2-4 supporting props or elements that reinforce the product's ingredients, notes, use or lifestyle. Keep them secondary and never covering the product.\n* Choose a cohesive color palette that complements the product's own colors, and say it explicitly.\n* Describe the lighting precisely (e.g. \"low-key dramatic side light with warm rim light\", \"golden-hour backlight with soft fill\").\n* Use depth: product sharp in the foreground, background with gentle bokeh or atmospheric haze.\n* Compose for the requested format (square, portrait or landscape).\n\n# The product (non-negotiable)\n\n* Keep the product exactly as it appears in the photo: same shape, proportions, colors, materials, labels, logos and printed text. Do not redesign, rename or duplicate it.\n* The product is the hero: centered or on a strong compositional third, fully in frame, tack-sharp, realistic reflections and contact shadows that match the scene.\n\n# Output\n\n* Return only the prompt text: one paragraph, roughly 80-130 words, no headings, no quotes, no explanations.\n* Order: product + placement, scene/surface, props, palette, lighting, camera/lens look, quality keywords.\n* End with: \"photorealistic commercial advertising photography, high detail, no text, no watermark\".\n\n# Example\n\nInput: Product: Noir Tide cologne. Description: woody aquatic fragrance in a dark blue glass bottle with silver cap.\n\nOutput: The Noir Tide cologne bottle, exactly as in the reference photo, standing on a slab of wet black volcanic rock at the edge of a dark ocean, cold sea water splashing around its base in frozen droplets, a few smooth pebbles and a sprig of driftwood beside it, deep navy and silver palette with a hint of teal, moody low-key lighting with a crisp cool rim light outlining the bottle and a soft glow on the label, misty dusk seascape blurred in the background, 85mm lens at f/2.8, shallow depth of field, photorealistic commercial advertising photography, high detail, no text, no watermark"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "9ee8790f-2626-4b16-8deb-a4865c96ad61",
+      "name": "Gpt-4.1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        880,
+        544
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "L1SDfTYUQ3t3VySO",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "id": "ada3bc0d-7b45-4661-ac53-d2e1016bab24",
+      "name": "Status: photo",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1152,
+        256
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "go2market_jobs"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "jobId",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate input').first().json.jobId }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "prompt",
+              "displayName": "prompt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "value": {
+            "status": "photo",
+            "prompt": "={{ $json.output }}"
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "fc709cce-eda0-46af-91b9-9b18e8cb50e9",
+      "name": "Attach photo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1376,
+        256
+      ],
+      "parameters": {
+        "jsCode": "// The agent and data table drop binaries, so re-attach the uploaded photo.\nreturn [{\n  json: { prompt: $('Write prompt').first().json.output },\n  binary: $('Webhook').first().binary,\n}];"
+      }
+    },
+    {
+      "id": "59b8e462-8a52-4ccd-adcd-28f455386394",
+      "name": "Generate image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1600,
+        256
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/images/edits",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "image",
+              "inputDataFieldName": "photo"
+            },
+            {
+              "name": "prompt",
+              "value": "={{ $json.prompt }}"
+            },
+            {
+              "name": "model",
+              "value": "gpt-image-2"
+            },
+            {
+              "name": "size",
+              "value": "={{ $('Validate input').first().json.size }}"
+            },
+            {
+              "name": "quality",
+              "value": "high"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 240000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "openAiApi": {
+          "id": "L1SDfTYUQ3t3VySO",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "id": "493d3c4a-3374-48ac-ac21-41c17d14ee4d",
+      "name": "Convert to File",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1824,
+        176
+      ],
+      "parameters": {
+        "operation": "toBinary",
+        "sourceProperty": "data[0].b64_json",
+        "options": {
+          "fileName": "product.png"
+        }
+      }
+    },
+    {
+      "id": "49294462-6cff-4e5b-ac83-e5a9ff93110a",
+      "name": "Upload to imgbb",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2048,
+        176
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.imgbb.com/1/upload",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "image",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "Gj6JKQ7xYJ77lJjV",
+          "name": "Query Auth account 2"
+        }
+      }
+    },
+    {
+      "id": "1cc8d4e4-cc1e-42f4-9361-6d79bc8a467e",
+      "name": "Status: done",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2272,
+        128
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "go2market_jobs"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "jobId",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate input').first().json.jobId }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "imageUrl",
+              "displayName": "imageUrl",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "value": {
+            "status": "done",
+            "imageUrl": "={{ $json.data.url }}"
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "3dc34bb8-42a4-43f2-a763-538804f84285",
+      "name": "Ad params",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2496,
+        128
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "uid",
+              "name": "uid",
+              "value": "={{ $('Validate input').first().json.uid }}",
+              "type": "string"
+            },
+            {
+              "id": "event",
+              "name": "event",
+              "value": "ad",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "b22d485d-6404-4325-9084-0374bb4fc394",
+      "name": "Progress: ad",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        2720,
+        128
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "H1Vph6YPLiNFlEoN"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "86701dab-3c85-4b66-8a06-27ee06eaca49",
+      "name": "Send email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2944,
+        128
+      ],
+      "parameters": {
+        "sendTo": "={{ $('Progress: spend').first().json.progress.email }}",
+        "subject": "=Your ad is ready: {{ $('Validate input').first().json.title }}",
+        "emailType": "text",
+        "message": "=Hello,\n\nYour advertising image for \"{{ $('Validate input').first().json.title }}\" is ready:\n{{ $('Upload to imgbb').first().json.data.url }}\n\nKeep chatting with our art director to unlock more shoots.\n\nGo 2 Market",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "onError": "continueRegularOutput",
+      "webhookId": "659c9993-9579-4ee8-a2e5-b9fe37285d38",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PD9n6O4Ac0w486Az",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "id": "ab7029d5-b96a-47ff-a507-c533dc105d1a",
+      "name": "Respond cannot shoot",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1168,
+        320
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, data: { progress: $json.progress }, error: $json.error } }}",
+        "options": {
+          "responseCode": "={{ $json.status }}"
+        }
+      }
+    },
+    {
+      "id": "9a3fc9d2-4f00-4545-9468-72aef7de72e6",
+      "name": "Respond invalid",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        416
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, data: null, error: $json.error } }}",
+        "options": {
+          "responseCode": 400
+        }
+      }
+    },
+    {
+      "id": "c8296a08-e7f1-447f-b05d-52e0be062272",
+      "name": "Status: failed",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2272,
+        368
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "go2market_jobs"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "jobId",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate input').first().json.jobId }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "error",
+              "displayName": "error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "value": {
+            "status": "failed",
+            "error": "Generation failed. Your shoot was refunded, please try again."
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e7aaa73b-82c8-4196-bd46-3589360c7589",
+      "name": "Refund params",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2496,
+        368
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "uid",
+              "name": "uid",
+              "value": "={{ $('Validate input').first().json.uid }}",
+              "type": "string"
+            },
+            {
+              "id": "event",
+              "name": "event",
+              "value": "refund",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "d0d215ff-cdc8-4286-8f8e-9fed823f76a6",
+      "name": "Progress: refund",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        2720,
+        368
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "H1Vph6YPLiNFlEoN"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "aec50da1-667a-42f0-8106-37ec1a49f936",
+      "name": "Status webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        224
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "go-2-market-v3-status",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "e39fda02-36f4-4933-baa1-25a925e9700f",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "BmL6rw2CJE5ljL46",
+          "name": "Header Auth account 2"
+        }
+      }
+    },
+    {
+      "id": "b70d8836-b1e3-45f3-924a-fc9a200d6dd3",
+      "name": "Find job",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        272,
+        448
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "go2market_jobs"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "jobId",
+              "condition": "eq",
+              "keyValue": "={{ String($json.body.jobId ?? '') || '-' }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "d5d61871-20dc-4536-bc0d-1c9ec78e0fbd",
+      "name": "Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        496,
+        448
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.jobId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "b29a7e81-f15d-4ab4-aed6-7277a855c815",
+      "name": "Respond status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        352
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, data: { status: $json.status, title: $json.title || null, prompt: $json.prompt || null, imageUrl: $json.imageUrl || null, error: $json.error || null }, error: null } }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "da593117-a109-4524-8c02-7079405f1ec2",
+      "name": "Respond not found",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        544
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{ \"success\": false, \"data\": null, \"error\": \"Job not found.\" }",
+        "options": {
+          "responseCode": 404
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate input": {
+      "main": [
+        [
+          {
+            "node": "Is valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is valid?": {
+      "main": [
+        [
+          {
+            "node": "Progress: spend",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Progress: spend": {
+      "main": [
+        [
+          {
+            "node": "Can shoot?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Can shoot?": {
+      "main": [
+        [
+          {
+            "node": "Create job",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond cannot shoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create job": {
+      "main": [
+        [
+          {
+            "node": "Log shoot in chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log shoot in chat": {
+      "main": [
+        [
+          {
+            "node": "Respond job id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond job id": {
+      "main": [
+        [
+          {
+            "node": "Write prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write prompt": {
+      "main": [
+        [
+          {
+            "node": "Status: photo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Status: failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gpt-4.1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Write prompt",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status: photo": {
+      "main": [
+        [
+          {
+            "node": "Attach photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach photo": {
+      "main": [
+        [
+          {
+            "node": "Generate image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate image": {
+      "main": [
+        [
+          {
+            "node": "Convert to File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Status: failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to File": {
+      "main": [
+        [
+          {
+            "node": "Upload to imgbb",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to imgbb": {
+      "main": [
+        [
+          {
+            "node": "Status: done",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Status: failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status: done": {
+      "main": [
+        [
+          {
+            "node": "Ad params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ad params": {
+      "main": [
+        [
+          {
+            "node": "Progress: ad",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Progress: ad": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status: failed": {
+      "main": [
+        [
+          {
+            "node": "Refund params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refund params": {
+      "main": [
+        [
+          {
+            "node": "Progress: refund",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status webhook": {
+      "main": [
+        [
+          {
+            "node": "Find job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find job": {
+      "main": [
+        [
+          {
+            "node": "Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Found?": {
+      "main": [
+        [
+          {
+            "node": "Respond status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond not found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodeGroups": [
+    {
+      "id": "3b1f0158-cdb2-4d51-b662-5101fff073fd",
+      "name": "Check and charge a shoot",
+      "nodeNames": [
+        "Validate input",
+        "Is valid?",
+        "Respond invalid",
+        "Progress: spend",
+        "Can shoot?",
+        "Respond cannot shoot",
+        "Create job",
+        "Log shoot in chat",
+        "Respond job id"
+      ],
+      "description": "Validates the upload, spends 1 credit (checks email, level unlocks), creates the job and returns its id."
+    },
+    {
+      "id": "d253a880-3cda-491c-a457-6cdd8ed04afa",
+      "name": "Shoot the ad",
+      "nodeNames": [
+        "Write prompt",
+        "Gpt-4.1",
+        "Status: photo",
+        "Attach photo",
+        "Generate image",
+        "Convert to File",
+        "Upload to imgbb",
+        "Status: done",
+        "Ad params",
+        "Progress: ad",
+        "Send email",
+        "Status: failed",
+        "Refund params",
+        "Progress: refund"
+      ],
+      "description": "Writes the scene prompt, shoots with gpt-image-2, hosts on imgbb, awards +50 XP, emails it. On any failure: marks failed and refunds."
+    },
+    {
+      "id": "2b0b2594-a286-4c1b-bd3a-2b297d7092bf",
+      "name": "Poll a job",
+      "nodeNames": [
+        "Find job",
+        "Found?",
+        "Respond status",
+        "Respond not found"
+      ],
+      "description": "Returns status, prompt and imageUrl for a jobId, or 404."
+    }
+  ]
+}

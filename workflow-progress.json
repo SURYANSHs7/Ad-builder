@@ -1,0 +1,346 @@
+{
+  "name": "Go 2 Market Â· Progress",
+  "nodes": [
+    {
+      "id": "0080a860-d7fc-4825-a018-d513b4b95e2f",
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "c548e626-906c-415a-8e8b-6b19fc67fe41",
+      "name": "Find user",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        272,
+        128
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "g2m_users"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "uid",
+              "condition": "eq",
+              "keyValue": "={{ $json.uid }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "d2a52a53-6e51-4fae-acd9-8c84e87d49fa",
+      "name": "Apply rules",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        128
+      ],
+      "parameters": {
+        "jsCode": "// Single source of truth for XP, levels, credits and unlocks.\nconst input = $('Start').first().json;\nconst found = $input.first().json;\nconst now = Date.now();\nconst today = new Date(now).toISOString().slice(0, 10);\nconst yesterday = new Date(now - 864e5).toISOString().slice(0, 10);\n\nconst LEVELS = [\n  { level: 1, title: 'Intern', xp: 0, credits: 0 },\n  { level: 2, title: 'Junior Creative', xp: 100, credits: 1 },\n  { level: 3, title: 'Art Director', xp: 250, credits: 1 },\n  { level: 4, title: 'Creative Director', xp: 500, credits: 2 },\n  { level: 5, title: 'Chief Creative', xp: 1000, credits: 3 },\n];\nconst FORMATS = { square: 1, portrait: 2, landscape: 2 };\nconst STYLES = { auto: 1, 'luxe-dark': 3, sunlit: 3, 'minimal-studio': 3, nature: 3, neon: 3 };\nconst DIRECTION_LEVEL = 4;\nconst DAILY_REWARDED = 20;\nconst DAILY_CAP = 60;\n\nconst num = (v) => Number(v ?? 0) || 0;\nconst u = {\n  uid: input.uid,\n  email: found.email ?? '',\n  emailVerified: found.emailVerified === true,\n  codeHash: found.codeHash ?? '',\n  codeExpires: num(found.codeExpires),\n  codeTries: num(found.codeTries),\n  xp: num(found.xp),\n  credits: num(found.credits),\n  level: num(found.level) || 1,\n  messages: num(found.messages),\n  ads: num(found.ads),\n  rewardedToday: num(found.rewardedToday),\n  sentToday: num(found.sentToday),\n  activeDate: found.activeDate ?? '',\n  streak: num(found.streak),\n  lastText: found.lastText ?? '',\n  photoRewarded: found.photoRewarded ?? '',\n};\n\nlet ok = true, status = 200, error = null, gained = 0, mergedUid = null;\nconst fail = (code, message) => { ok = false; status = code; error = message; };\nconst levelFor = (xp) => LEVELS.filter((l) => xp >= l.xp).pop();\n\nswitch (input.event) {\n  case 'message': {\n    if (u.activeDate !== today) {\n      u.streak = u.activeDate === yesterday ? u.streak + 1 : 1;\n      u.activeDate = today;\n      u.sentToday = 0;\n      u.rewardedToday = 0;\n      gained += 15 * Math.min(u.streak, 5);\n    }\n    if (u.sentToday >= DAILY_CAP) {\n      fail(429, \"You've reached today's chat limit. Come back tomorrow.\");\n      break;\n    }\n    u.sentToday += 1;\n    u.messages += 1;\n    const text = String(input.text ?? '').trim().toLowerCase().replace(/\\s+/g, ' ');\n    if (text.split(' ').length >= 3 && text !== u.lastText && u.rewardedToday < DAILY_REWARDED) {\n      gained += 10;\n      u.rewardedToday += 1;\n    }\n    u.lastText = text.slice(0, 500);\n    if (input.photoKey && input.photoKey !== u.photoRewarded && u.rewardedToday < DAILY_REWARDED) {\n      gained += 30;\n      u.rewardedToday += 1;\n      u.photoRewarded = input.photoKey;\n    }\n    break;\n  }\n  case 'setCode': {\n    if (u.emailVerified) fail(400, 'Your email is already verified.');\n    else if (u.codeExpires - 9 * 60e3 > now) fail(429, 'Wait a minute before requesting another code.');\n    else {\n      u.email = input.email;\n      u.codeHash = input.codeHash;\n      u.codeExpires = now + 10 * 60e3;\n      u.codeTries = 0;\n    }\n    break;\n  }\n  case 'verify': {\n    if (!u.codeHash || now > u.codeExpires) fail(400, 'That code has expired. Request a new one.');\n    else if (input.codeHash !== u.codeHash) {\n      u.codeTries += 1;\n      if (u.codeTries >= 5) u.codeHash = '';\n      fail(400, u.codeHash ? \"That code isn't right.\" : 'Too many attempts. Request a new code.');\n    } else {\n      u.codeHash = '';\n      if (input.ownerUid && input.ownerUid !== u.uid) mergedUid = input.ownerUid;\n      else if (!u.emailVerified) {\n        u.emailVerified = true;\n        u.credits += 1;\n        gained += 100;\n      }\n    }\n    break;\n  }\n  case 'spend': {\n    const level = levelFor(u.xp).level;\n    const aspect = input.aspect || 'square';\n    const style = input.style || 'auto';\n    if (!u.emailVerified) fail(403, 'Verify your email to start shooting.');\n    else if (!(aspect in FORMATS) || !(style in STYLES)) fail(400, 'Unknown format or style.');\n    else if (FORMATS[aspect] > level) fail(403, 'Reach level ' + FORMATS[aspect] + ' to unlock this format.');\n    else if (STYLES[style] > level) fail(403, 'Reach level ' + STYLES[style] + ' to unlock scene styles.');\n    else if (input.direction && level < DIRECTION_LEVEL) fail(403, 'Reach level ' + DIRECTION_LEVEL + ' to add art direction.');\n    else if (u.credits < 1) fail(402, 'No shoots left. Keep chatting to earn your next one.');\n    else u.credits -= 1;\n    break;\n  }\n  case 'ad':\n    u.ads += 1;\n    gained += 50;\n    break;\n  case 'refund':\n    u.credits += 1;\n    break;\n}\n\nu.xp += gained;\nconst before = u.level;\nconst after = Math.max(before, levelFor(u.xp).level);\nfor (let l = before + 1; l <= after; l++) u.credits += LEVELS[l - 1].credits;\nu.level = after;\n\nconst current = LEVELS[after - 1];\nconst next = LEVELS[after] ?? null;\nconst progress = {\n  level: after,\n  title: current.title,\n  xp: u.xp,\n  levelXp: current.xp,\n  nextXp: next ? next.xp : null,\n  nextTitle: next ? next.title : null,\n  credits: u.credits,\n  messages: u.messages,\n  ads: u.ads,\n  streak: u.streak,\n  email: u.emailVerified ? u.email : null,\n  unlocks: {\n    formats: Object.keys(FORMATS).filter((k) => FORMATS[k] <= after),\n    styles: Object.keys(STYLES).filter((k) => STYLES[k] <= after),\n    direction: after >= DIRECTION_LEVEL,\n    signature: after >= 5,\n  },\n};\n\nreturn [{ json: { ok, status, error, gained, leveledUp: after > before, mergedUid, progress, user: u } }];"
+      }
+    },
+    {
+      "id": "e5e7fd19-4966-415b-ae86-1a324689beac",
+      "name": "Save user",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        128
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "g2m_users"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "uid",
+              "condition": "eq",
+              "keyValue": "={{ $json.user.uid }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "uid",
+              "displayName": "uid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "emailVerified",
+              "displayName": "emailVerified",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "codeHash",
+              "displayName": "codeHash",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "codeExpires",
+              "displayName": "codeExpires",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "codeTries",
+              "displayName": "codeTries",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "xp",
+              "displayName": "xp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "credits",
+              "displayName": "credits",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "level",
+              "displayName": "level",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "messages",
+              "displayName": "messages",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ads",
+              "displayName": "ads",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "rewardedToday",
+              "displayName": "rewardedToday",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sentToday",
+              "displayName": "sentToday",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "activeDate",
+              "displayName": "activeDate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "streak",
+              "displayName": "streak",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lastText",
+              "displayName": "lastText",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "photoRewarded",
+              "displayName": "photoRewarded",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "value": {
+            "uid": "={{ $json.user.uid }}",
+            "email": "={{ $json.user.email }}",
+            "emailVerified": "={{ $json.user.emailVerified }}",
+            "codeHash": "={{ $json.user.codeHash }}",
+            "codeExpires": "={{ $json.user.codeExpires }}",
+            "codeTries": "={{ $json.user.codeTries }}",
+            "xp": "={{ $json.user.xp }}",
+            "credits": "={{ $json.user.credits }}",
+            "level": "={{ $json.user.level }}",
+            "messages": "={{ $json.user.messages }}",
+            "ads": "={{ $json.user.ads }}",
+            "rewardedToday": "={{ $json.user.rewardedToday }}",
+            "sentToday": "={{ $json.user.sentToday }}",
+            "activeDate": "={{ $json.user.activeDate }}",
+            "streak": "={{ $json.user.streak }}",
+            "lastText": "={{ $json.user.lastText }}",
+            "photoRewarded": "={{ $json.user.photoRewarded }}"
+          }
+        },
+        "options": {}
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "5a3619a9-6c38-4268-92de-1db081c86342",
+      "name": "Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        944,
+        128
+      ],
+      "parameters": {
+        "jsCode": "// Return the outcome without internal fields like the code hash.\nconst { user, ...result } = $('Apply rules').first().json;\nreturn [{ json: result }];"
+      }
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Find user",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find user": {
+      "main": [
+        [
+          {
+            "node": "Apply rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply rules": {
+      "main": [
+        [
+          {
+            "node": "Save user",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save user": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodeGroups": [
+    {
+      "id": "37227ae5-c700-4f49-8633-6062e67299e4",
+      "name": "Apply XP and save",
+      "nodeNames": [
+        "Find user",
+        "Apply rules",
+        "Save user",
+        "Result"
+      ],
+      "description": "Loads the user, applies the event (message, verify, spend, ad, refund), recalculates level and credits, saves."
+    }
+  ]
+}

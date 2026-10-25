@@ -1,0 +1,1406 @@
+{
+  "name": "Go 2 Market Chat",
+  "nodes": [
+    {
+      "id": "c0abd2fc-da90-49af-9051-d33ffc91e80f",
+      "name": "Me webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "g2m-me",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "dcf8f66c-c668-492e-962b-07ea102b27cc",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "BmL6rw2CJE5ljL46",
+          "name": "Header Auth account 2"
+        }
+      }
+    },
+    {
+      "id": "1741e93a-9b7b-41a6-b493-b3f17788b53f",
+      "name": "Me input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        224
+      ],
+      "parameters": {
+        "jsCode": "const uid = String($input.first().json.body?.uid ?? '');\nconst ok = /^[a-z0-9]{24}$/.test(uid);\nreturn [{ json: { ok, status: 400, error: ok ? null : 'Invalid session.', uid, event: 'visit' } }];"
+      }
+    },
+    {
+      "id": "a141c558-60b7-4445-ac01-1f994b5d2c61",
+      "name": "Me valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        496,
+        224
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "3d319b27-743e-4e8d-becc-77c0def26916",
+      "name": "Progress: visit",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        720,
+        128
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "H1Vph6YPLiNFlEoN"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "5d928b33-b18a-40a1-a4dd-e319cc199989",
+      "name": "Recent messages",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        944,
+        128
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "g2m_messages"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "uid",
+              "condition": "eq",
+              "keyValue": "={{ $('Me input').first().json.uid }}"
+            }
+          ]
+        },
+        "limit": 40,
+        "orderBy": true,
+        "orderByColumn": "id",
+        "orderByDirection": "DESC"
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "472bf438-a67b-4960-b0a1-47f30ad87002",
+      "name": "Recent ads",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1168,
+        128
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "go2market_jobs"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "uid",
+              "condition": "eq",
+              "keyValue": "={{ $('Me input').first().json.uid }}"
+            },
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "done"
+            }
+          ]
+        },
+        "limit": 12,
+        "orderBy": true,
+        "orderByColumn": "id",
+        "orderByDirection": "DESC"
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "30bb768f-03a2-494a-a78b-63ff0f5a8ae6",
+      "name": "Respond me",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1392,
+        128
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, data: { progress: $('Progress: visit').first().json.progress, messages: $('Recent messages').all().filter(i => i.json.id).reverse().map(i => ({ id: i.json.id, role: i.json.role, text: i.json.text, brief: i.json.brief ? JSON.parse(i.json.brief) : null })), ads: $('Recent ads').all().filter(i => i.json.id).map(i => ({ jobId: i.json.jobId, title: i.json.title, imageUrl: i.json.imageUrl, prompt: i.json.prompt, createdAt: i.json.createdAt })) }, error: null } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "1e0a523f-1bd3-40f7-8268-f81a0244d61a",
+      "name": "Respond me error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        320
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, data: $json.progress ? { progress: $json.progress } : null, error: $json.error } }}",
+        "options": {
+          "responseCode": 400
+        }
+      }
+    },
+    {
+      "id": "afb6737e-6aa6-410e-9075-b38a5fc12c39",
+      "name": "Chat webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        528
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "g2m-chat",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "6ebea470-e2ac-44a8-9ca6-09d16f3a71e5",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "BmL6rw2CJE5ljL46",
+          "name": "Header Auth account 2"
+        }
+      }
+    },
+    {
+      "id": "7273759c-7113-44eb-8d98-98ee515d9d16",
+      "name": "Chat input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        528
+      ],
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body ?? {};\nconst uid = String(body.uid ?? '');\nconst text = String(body.text ?? '').trim();\nconst photoKey = String(body.photoKey ?? '').slice(0, 200);\n\nlet error = null;\nif (!/^[a-z0-9]{24}$/.test(uid)) error = 'Invalid session.';\nelse if (!text) error = 'Write a message first.';\nelse if (text.length > 1000) error = 'Keep messages under 1000 characters.';\n\nreturn [{ json: { ok: !error, status: 400, error, uid, event: 'message', text, hasPhoto: body.hasPhoto === true, photoKey } }];"
+      }
+    },
+    {
+      "id": "fae9d7a8-c85b-4fe1-8598-f0671793606f",
+      "name": "Chat valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        528
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "3033fac8-8e56-4125-b973-ce816a441dce",
+      "name": "Progress: message",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        672,
+        432
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "H1Vph6YPLiNFlEoN"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "06445df3-30a7-42a1-a00d-d9a26f1c77f8",
+      "name": "Under daily limit?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        896,
+        432
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "70288fcf-ca32-4aa3-bfc1-c009f4f94b62",
+      "name": "Recent history",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        336
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "g2m_messages"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "uid",
+              "condition": "eq",
+              "keyValue": "={{ $('Chat input').first().json.uid }}"
+            }
+          ]
+        },
+        "limit": 20,
+        "orderBy": true,
+        "orderByColumn": "id",
+        "orderByDirection": "DESC"
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "a9e62f5d-7a2f-483d-b131-2f7bcf064264",
+      "name": "Art director",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1344,
+        336
+      ],
+      "parameters": {
+        "promptType": "define",
+        "hasOutputParser": true,
+        "text": "=Conversation so far:\n{{ $('Recent history').all().filter(i => i.json.id).reverse().map(i => i.json.role === 'user' ? 'Client: ' + i.json.text : i.json.role === 'shoot' ? '(The client shot an ad from the brief.)' : 'You: ' + i.json.text).join('\\n') || '(none, this is their first message)' }}\n\nContext: product photo attached: {{ $('Chat input').first().json.hasPhoto ? 'yes' : 'no' }}. Level {{ $('Progress: message').first().json.progress.level }} ({{ $('Progress: message').first().json.progress.title }}), shoots left: {{ $('Progress: message').first().json.progress.credits }}, email verified: {{ $('Progress: message').first().json.progress.email ? 'yes' : 'no' }}.\n\nClient: {{ $('Chat input').first().json.text }}",
+        "options": {
+          "systemMessage": "# Role\n\nYou are the art director at Go 2 Market, a studio that turns everyday product photos into campaign-ready advertising images. You chat with potential clients on our website.\n\n# Goal\n\nUnderstand the client's product well enough to write a shoot brief, then hand it over so they can shoot the ad right here in the chat. Be someone they enjoy talking to: sharp, warm and genuinely useful about marketing.\n\n# How you talk\n\n- Short replies: 1-3 sentences, never more than 60 words. Plain text only: no markdown, no lists, no emoji.\n- Ask at most two questions per reply.\n- Sound like a senior creative, not a chatbot: specific, confident, never gushing. Never say \"Great question\", \"Absolutely\" or \"I'd be happy to help\".\n- If asked what we do: we create AI-assisted product advertising, from studio-grade product shots to campaign visuals. The first shoot is free once they verify their email, and they earn more shoots by leveling up. Never invent prices, timelines or guarantees; for anything commercial, offer to connect them with the team.\n- Off-topic questions: answer briefly if harmless, then steer back to their product.\n\n# What a brief needs\n\n1. The product name and what it is.\n2. Who it is for and the feeling it should create (mood, setting, season, where the ad will run).\n3. A product photo. The client attaches it with the paperclip in the chat. The context line tells you whether one is attached.\n\nAsk for whatever is missing, one or two things at a time. Once you know the product, ask for the photo if it is missing.\n\n# The brief\n\nWhen you know the product and a mood AND a photo is attached, return a brief and say in your reply that the brief is ready and they can shoot it below. Otherwise brief is null. If they ask for changes after a brief, return the updated brief.\n- brief.title: the product name, at most 60 characters.\n- brief.description: 1-3 sentences for the image team: what the product is, the audience, the mood, and the setting and props you recommend. At most 400 characters. Do not describe the bottle or label; the photo shows it.\n\n# Progress\n\nClients earn XP for chatting and level up to unlock more free shoots, formats and scene styles. The context line shows their level and shoots left. Mention it only when useful, for example when they have no shoots left, tell them a few more messages will earn the next one. Never invent XP numbers.\n\n# Output\n\nReturn JSON: { \"reply\": string, \"brief\": { \"title\": string, \"description\": string } | null }"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "62d8a8d4-2696-48a9-99b6-e6aa1cc8465a",
+      "name": "Gpt-4.1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1360,
+        560
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "L1SDfTYUQ3t3VySO",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "id": "2186c7ce-0283-473e-a3aa-448281ad98b2",
+      "name": "Reply format",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1488,
+        560
+      ],
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"reply\": {\n      \"type\": \"string\"\n    },\n    \"brief\": {\n      \"type\": [\n        \"object\",\n        \"null\"\n      ],\n      \"properties\": {\n        \"title\": {\n          \"type\": \"string\"\n        },\n        \"description\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"title\",\n        \"description\"\n      ]\n    }\n  },\n  \"required\": [\n    \"reply\",\n    \"brief\"\n  ]\n}"
+      }
+    },
+    {
+      "id": "18d087d9-d2c3-4526-993a-ea5fe43ef422",
+      "name": "Save turn",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        240
+      ],
+      "parameters": {
+        "jsCode": "const input = $('Chat input').first().json;\nconst out = $('Art director').first().json.output;\nreturn [\n  { json: { uid: input.uid, role: 'user', text: input.text, brief: '' } },\n  { json: { uid: input.uid, role: 'assistant', text: out.reply, brief: out.brief ? JSON.stringify(out.brief) : '' } },\n];"
+      }
+    },
+    {
+      "id": "850459b6-cef0-4dce-b934-74a230ab549d",
+      "name": "Insert messages",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1920,
+        240
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "g2m_messages"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "uid",
+              "displayName": "uid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "role",
+              "displayName": "role",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "text",
+              "displayName": "text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "brief",
+              "displayName": "brief",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "value": {
+            "uid": "={{ $json.uid }}",
+            "role": "={{ $json.role }}",
+            "text": "={{ $json.text }}",
+            "brief": "={{ $json.brief }}"
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "fb35d022-695b-4da6-9f6c-69c475f85f92",
+      "name": "Respond chat",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2144,
+        240
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, data: { reply: $('Art director').first().json.output.reply, brief: $('Art director').first().json.output.brief ?? null, progress: $('Progress: message').first().json.progress, gained: $('Progress: message').first().json.gained, leveledUp: $('Progress: message').first().json.leveledUp }, error: null } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "fae9b4d8-1f7d-4a50-ade6-741d6936064f",
+      "name": "Respond limit",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        528
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, data: $json.progress ? { progress: $json.progress } : null, error: $json.error } }}",
+        "options": {
+          "responseCode": 429
+        }
+      }
+    },
+    {
+      "id": "e48efe03-3248-4459-a367-58af29802e5a",
+      "name": "Respond chat error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        624
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, data: $json.progress ? { progress: $json.progress } : null, error: $json.error } }}",
+        "options": {
+          "responseCode": 400
+        }
+      }
+    },
+    {
+      "id": "461309be-212c-4e1e-b8e1-bc6738d5a6f8",
+      "name": "Respond agent down",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1696,
+        432
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, data: { progress: $('Progress: message').first().json.progress }, error: 'The art director is unavailable right now. Try again in a moment.' } }}",
+        "options": {
+          "responseCode": 502
+        }
+      }
+    },
+    {
+      "id": "8881e3dc-16e1-45f3-91cf-25a488674d23",
+      "name": "Email webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        848
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "g2m-email",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "c299fc5c-121f-4623-b9cb-333219f0a1f7",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "BmL6rw2CJE5ljL46",
+          "name": "Header Auth account 2"
+        }
+      }
+    },
+    {
+      "id": "04d5c858-749c-4a52-b8c7-f5b7305bb3a8",
+      "name": "Email input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        1248
+      ],
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body ?? {};\nconst uid = String(body.uid ?? '');\nconst action = String(body.action ?? '');\nconst email = String(body.email ?? '').trim().toLowerCase();\nconst code = String(body.code ?? '').trim();\n\nlet error = null;\nif (!/^[a-z0-9]{24}$/.test(uid)) error = 'Invalid session.';\nelse if (action !== 'start' && action !== 'verify') error = 'Unknown action.';\nelse if (action === 'start' && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) error = 'Enter a valid email.';\nelse if (action === 'verify' && !/^\\d{6}$/.test(code)) error = 'Enter the 6-digit code.';\n\nconst newCode = String(Math.floor(100000 + Math.random() * 900000));\nreturn [{ json: { ok: !error, status: 400, error, uid, action, email, code, newCode } }];"
+      }
+    },
+    {
+      "id": "debf1e15-023a-4455-b83d-8ffbde72db88",
+      "name": "Email valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        496,
+        1248
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "41bc920d-7a80-459d-ac05-bb410911d61b",
+      "name": "Start or verify?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        720,
+        1152
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "outputKey": "start",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "start"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "verify",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "verify"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a9296aa9-d4d5-4f34-88bf-ea6642c5231b",
+      "name": "Code params",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        944,
+        1056
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "uid",
+              "name": "uid",
+              "value": "={{ $json.uid }}",
+              "type": "string"
+            },
+            {
+              "id": "event",
+              "name": "event",
+              "value": "setCode",
+              "type": "string"
+            },
+            {
+              "id": "email",
+              "name": "email",
+              "value": "={{ $json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "codeHash",
+              "name": "codeHash",
+              "value": "={{ ($json.newCode + $json.uid).hash('sha256') }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "34c9741a-ddb9-4903-a300-c1def6192c92",
+      "name": "Progress: save code",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        1168,
+        1056
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "H1Vph6YPLiNFlEoN"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "e6ce4a99-49f4-40a6-aebe-6285f47beb92",
+      "name": "Code saved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1392,
+        1056
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "8ccea139-64ac-42ac-a5d1-0785c72697b8",
+      "name": "Send code",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1616,
+        960
+      ],
+      "parameters": {
+        "sendTo": "={{ $('Email input').first().json.email }}",
+        "subject": "={{ $('Email input').first().json.newCode }} is your Go 2 Market code",
+        "emailType": "text",
+        "message": "=Your Go 2 Market verification code is {{ $('Email input').first().json.newCode }}.\n\nIt expires in 10 minutes. If you didn't ask for it, you can ignore this email.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "webhookId": "6e85412b-05cf-40da-931b-fa2de18b2a0f",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PD9n6O4Ac0w486Az",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "id": "3bcc2a46-8092-4d35-8434-d4c2dbffe345",
+      "name": "Respond code sent",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1840,
+        960
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, data: { sent: true, progress: $('Progress: save code').first().json.progress }, error: null } }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "0e75bc9c-2773-48e7-b72e-35f67f278c94",
+      "name": "Respond code error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1616,
+        1152
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, data: $json.progress ? { progress: $json.progress } : null, error: $json.error } }}",
+        "options": {
+          "responseCode": "={{ $json.status }}"
+        }
+      }
+    },
+    {
+      "id": "028378aa-5f41-426c-b519-0e55abd291c8",
+      "name": "Find email owner",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        944,
+        1344
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "g2m_users"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "email",
+              "condition": "eq",
+              "keyValue": "={{ $('Email input').first().json.email || '-' }}"
+            },
+            {
+              "keyName": "emailVerified",
+              "condition": "isTrue"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "1a4e6e83-0e99-4912-b2a8-3e0abd32037a",
+      "name": "Verify params",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1168,
+        1344
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "uid",
+              "name": "uid",
+              "value": "={{ $('Email input').first().json.uid }}",
+              "type": "string"
+            },
+            {
+              "id": "event",
+              "name": "event",
+              "value": "verify",
+              "type": "string"
+            },
+            {
+              "id": "codeHash",
+              "name": "codeHash",
+              "value": "={{ ($('Email input').first().json.code + $('Email input').first().json.uid).hash('sha256') }}",
+              "type": "string"
+            },
+            {
+              "id": "ownerUid",
+              "name": "ownerUid",
+              "value": "={{ $json.uid ?? '' }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "bfe7aef5-a7d1-45cd-8bb5-925ea960258e",
+      "name": "Progress: verify",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        1392,
+        1344
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "H1Vph6YPLiNFlEoN"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "b2f045d2-dcfe-4cfa-a180-ce0be49cc2d8",
+      "name": "Respond verify",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1616,
+        1344
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: $json.ok, data: { progress: $json.progress, mergedUid: $json.mergedUid, gained: $json.gained, leveledUp: $json.leveledUp }, error: $json.error } }}",
+        "options": {
+          "responseCode": "={{ $json.ok ? 200 : $json.status }}"
+        }
+      }
+    },
+    {
+      "id": "f0ebc2a1-4e0e-403a-ab14-1a32947ce7ee",
+      "name": "Respond email error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        1344
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, data: $json.progress ? { progress: $json.progress } : null, error: $json.error } }}",
+        "options": {
+          "responseCode": 400
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Me webhook": {
+      "main": [
+        [
+          {
+            "node": "Me input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Me input": {
+      "main": [
+        [
+          {
+            "node": "Me valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Me valid?": {
+      "main": [
+        [
+          {
+            "node": "Progress: visit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond me error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Progress: visit": {
+      "main": [
+        [
+          {
+            "node": "Recent messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recent messages": {
+      "main": [
+        [
+          {
+            "node": "Recent ads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recent ads": {
+      "main": [
+        [
+          {
+            "node": "Respond me",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat webhook": {
+      "main": [
+        [
+          {
+            "node": "Chat input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat input": {
+      "main": [
+        [
+          {
+            "node": "Chat valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat valid?": {
+      "main": [
+        [
+          {
+            "node": "Progress: message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond chat error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Progress: message": {
+      "main": [
+        [
+          {
+            "node": "Under daily limit?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Under daily limit?": {
+      "main": [
+        [
+          {
+            "node": "Recent history",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recent history": {
+      "main": [
+        [
+          {
+            "node": "Art director",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Art director": {
+      "main": [
+        [
+          {
+            "node": "Save turn",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond agent down",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gpt-4.1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Art director",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply format": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Art director",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save turn": {
+      "main": [
+        [
+          {
+            "node": "Insert messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert messages": {
+      "main": [
+        [
+          {
+            "node": "Respond chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email webhook": {
+      "main": [
+        [
+          {
+            "node": "Email input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email input": {
+      "main": [
+        [
+          {
+            "node": "Email valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email valid?": {
+      "main": [
+        [
+          {
+            "node": "Start or verify?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond email error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start or verify?": {
+      "main": [
+        [
+          {
+            "node": "Code params",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Find email owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code params": {
+      "main": [
+        [
+          {
+            "node": "Progress: save code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Progress: save code": {
+      "main": [
+        [
+          {
+            "node": "Code saved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code saved?": {
+      "main": [
+        [
+          {
+            "node": "Send code",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond code error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send code": {
+      "main": [
+        [
+          {
+            "node": "Respond code sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find email owner": {
+      "main": [
+        [
+          {
+            "node": "Verify params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify params": {
+      "main": [
+        [
+          {
+            "node": "Progress: verify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Progress: verify": {
+      "main": [
+        [
+          {
+            "node": "Respond verify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodeGroups": [
+    {
+      "id": "a1fb4966-db9a-40e6-97d9-90459da4a059",
+      "name": "Me: load profile",
+      "nodeNames": [
+        "Me input",
+        "Me valid?",
+        "Progress: visit",
+        "Recent messages",
+        "Recent ads",
+        "Respond me",
+        "Respond me error"
+      ],
+      "description": "Creates the user on first visit and returns progress, the last 40 messages and the last 12 ads."
+    },
+    {
+      "id": "3beb94e3-f932-45e6-921a-1552177a41c2",
+      "name": "Email: verify with a code",
+      "nodeNames": [
+        "Email input",
+        "Email valid?",
+        "Start or verify?",
+        "Code params",
+        "Progress: save code",
+        "Code saved?",
+        "Send code",
+        "Respond code sent",
+        "Respond code error",
+        "Find email owner",
+        "Verify params",
+        "Progress: verify",
+        "Respond verify",
+        "Respond email error"
+      ],
+      "description": "start emails a 6-digit code (hashed, 10 min). verify checks it, grants the free shoot, or returns mergedUid if the email is already owned."
+    },
+    {
+      "id": "521fc83f-6b5d-455e-b60d-f50cea3461eb",
+      "name": "Chat: art director",
+      "nodeNames": [
+        "Chat input",
+        "Chat valid?",
+        "Progress: message",
+        "Under daily limit?",
+        "Recent history",
+        "Art director",
+        "Gpt-4.1",
+        "Reply format",
+        "Save turn",
+        "Insert messages",
+        "Respond chat",
+        "Respond limit",
+        "Respond chat error",
+        "Respond agent down"
+      ],
+      "description": "Awards message XP, enforces the daily cap, answers with the art director (reply + optional brief) and saves both turns."
+    }
+  ]
+}
